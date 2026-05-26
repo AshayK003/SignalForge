@@ -17,7 +17,7 @@ class ReportGenerator:
         self.files = files
         self.llm = llm
         self.prompts = prompts
-        self.log = logger
+        self.log = logger.info if logger else None
 
     def generate_weekly(self, week_start: str | None = None,
                         week_end: str | None = None) -> dict:
@@ -40,6 +40,9 @@ class ReportGenerator:
         all_themes = set()
         all_opportunities = []
         all_contradictions = []
+        all_core_ideas = []
+        all_open_questions = []
+        why_it_matters_list = []
 
         for s in summaries:
             src = self.db.get_source(s["source_id"])
@@ -52,6 +55,11 @@ class ReportGenerator:
                 all_themes.add(t)
             all_opportunities.extend(parse_json_field(s.get("opportunities", "[]")) or [])
             all_contradictions.extend(parse_json_field(s.get("contradictions", "[]")) or [])
+            all_core_ideas.extend(parse_json_field(s.get("core_ideas", "[]")) or [])
+            all_open_questions.extend(parse_json_field(s.get("open_questions", "[]")) or [])
+            why = s.get("why_it_matters", "")
+            if why:
+                why_it_matters_list.append(why)
 
         combined = "\n\n".join(sources_text)
 
@@ -82,6 +90,9 @@ class ReportGenerator:
             themes=list(all_themes),
             opportunities=all_opportunities,
             contradictions=all_contradictions,
+            core_ideas=all_core_ideas,
+            why_it_matters=why_it_matters_list,
+            open_questions=all_open_questions,
             sources=[self.db.get_source(sid) for sid in source_ids],
         )
 

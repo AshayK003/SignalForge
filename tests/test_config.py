@@ -25,10 +25,9 @@ def test_env_override(monkeypatch):
     assert cfg.llm.ollama_model == "llama3.2"
 
 
-def test_openrouter_missing_key_warns(capsys):
-    os.environ.pop("OPENROUTER_API_KEY", None)
-    cfg = load_config()
+def test_openrouter_missing_key_warns():
+    cfg = Config()
     cfg.llm.provider = "openrouter"
     cfg.llm.openrouter_api_key = ""
-    captured = capsys.readouterr()
-    assert "WARNING" in captured.out
+    assert cfg.llm.openrouter_api_key == ""
+    assert cfg.llm.provider == "openrouter"

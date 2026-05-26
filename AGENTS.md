@@ -20,10 +20,10 @@ Local-first AI knowledge digest system. Personal use, single-user. Ingests conte
 | UI | Streamlit (multipage) | Zero config, fast to build, good enough for 1 user |
 | Language | Python 3.11+ | Obvious choice |
 | Database | SQLite (WAL mode) | Zero config, one file, portable |
-| STT | faster-whisper | Fast, accurate, local |
-| PDF | pypdf | BSD license, no native deps |
+| STT | youtube-transcript-api / faster-whisper | YouTube captions (instant) + audio fallback |
+| PDF text | pypdf | BSD license, no native deps |
 | LLM | OpenRouter or Ollama | Config toggle, both OpenAI-compatible |
-| PDF gen | WeasyPrint | HTML→PDF, full CSS control |
+| PDF gen | fpdf2 + Segoe UI font | Zero native DLLs, Unicode support |
 | Cloud | rclone | Supports 40+ providers, battle-tested |
 
 ## Project Structure
@@ -48,7 +48,7 @@ SignalForge/
 │   ├── summarization/pipeline.py     # Chunk → summarize → synthesize → parse
 │   ├── summarization/prompts.py      # Prompt template loader
 │   ├── reports/generator.py          # Weekly aggregation + orchestration
-│   ├── reports/pdf_gen.py            # WeasyPrint PDF from HTML template
+│   ├── reports/pdf_gen.py            # fpdf2 PDF with Segoe UI font
 │   ├── reports/md_gen.py             # Markdown report generation
 │   ├── storage/db.py                 # SQLite CRUD (sources, transcripts, summaries, reports, tags)
 │   ├── storage/files.py              # Local file path manager
@@ -61,9 +61,10 @@ SignalForge/
 │   ├── summarize_chunk.md
 │   ├── synthesize.md
 │   ├── extract_insights.md
-│   └── weekly_report.md
-├── templates/report.html    # PDF HTML template + CSS
+│   ├── weekly_report.md
+│   └── pace_x_system.md     # PACE-X system prompt (overrides generic summarizer)
 ├── tests/                   # Pytest tests (24 passing)
+├── start_app.ps1            # Windows launcher — injects Deno, FFmpeg, Poppler, Tesseract into PATH
 ├── config.yaml              # Default configuration
 ├── .env.example             # Secrets template
 ├── requirements.txt         # Python dependencies
@@ -99,6 +100,21 @@ All with timestamps, foreign keys, cascading deletes. WAL mode for performance.
 - **Tests live in `tests/`.** Run with `pytest tests/ -v`.
 - **Prompts are files.** Edit `prompts/*.md` to change LLM behavior without touching code.
 
+## PACE-X Analysis Fields
+
+Every summary includes these structured fields from the PACE-X prompt:
+- **summary** — concise overview
+- **core_ideas** — key concepts/arguments
+- **insights** — original analysis/connections
+- **action_items** — concrete takeaways
+- **key_quotes** — notable excerpts
+- **themes** — cross-cutting topics
+- **technical_concepts** — specialized terminology
+- **opportunities** — actionable angles
+- **contradictions** — surprising/contrarian points
+- **why_it_matters** — significance/impact
+- **open_questions** — unresolved areas
+
 ## Common Tasks
 
 **Add a new source type:**
@@ -116,6 +132,22 @@ Edit `prompts/summarize_chunk.md` (or the other prompt files).
 
 **Switch LLM provider:**
 Set `LLM_PROVIDER=ollama` in `.env`. The client auto-switches base URL and model.
+
+**Customize a page's UI/UX:**
+Each page in `pages/` uses Streamlit containers, tabs, columns, and expanders. The
+`app/ui/components.py` module provides reusable `render_summary()` and `render_source_card()`.
+To change layout, edit the page file directly — no routing or state management needed.
+
+**Batch YouTube processing:**
+Paste multiple URLs (one per line) in the Ingest page. Processing happens in 3 phases:
+1. Fetch transcripts sequentially (captions or audio download)
+2. Summarize all in parallel via `ThreadPoolExecutor` (up to 5 workers)
+3. Combine all summaries into one synthesized analysis
+
+**Fix yt-dlp download issues:**
+yt-dlp uses `--dump-json` for metadata extraction, then downloads without `--print` flags.
+Audio files are found by mtime-sorted `*.mp3` glob. If downloads fail, the Ingest page shows
+a clear error message per-video without blocking the batch.
 
 ## Non-Goals
 

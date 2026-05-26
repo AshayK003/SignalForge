@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS summaries (
     level TEXT NOT NULL DEFAULT 'chunk' CHECK(level IN ('chunk','source','weekly')),
     parent_summary_id INTEGER REFERENCES summaries(id) ON DELETE SET NULL,
     summary_text TEXT NOT NULL,
+    core_ideas TEXT DEFAULT '[]',
     insights TEXT DEFAULT '[]',
     action_items TEXT DEFAULT '[]',
     key_quotes TEXT DEFAULT '[]',
@@ -61,6 +62,8 @@ CREATE TABLE IF NOT EXISTS summaries (
     technical_concepts TEXT DEFAULT '[]',
     opportunities TEXT DEFAULT '[]',
     contradictions TEXT DEFAULT '[]',
+    why_it_matters TEXT DEFAULT '',
+    open_questions TEXT DEFAULT '[]',
     model_used TEXT,
     chunk_index INTEGER,
     token_count INTEGER,
@@ -103,6 +106,12 @@ ALL_SCHEMAS = [
     SCHEMA_REPORT_SOURCES,
 ]
 
+SCHEMA_MIGRATIONS = [
+    "ALTER TABLE summaries ADD COLUMN core_ideas TEXT DEFAULT '[]';",
+    "ALTER TABLE summaries ADD COLUMN why_it_matters TEXT DEFAULT '';",
+    "ALTER TABLE summaries ADD COLUMN open_questions TEXT DEFAULT '[]';",
+]
+
 SCHEMA_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_sources_status ON sources(status);",
     "CREATE INDEX IF NOT EXISTS idx_sources_ingested ON sources(ingested_at);",
@@ -114,7 +123,7 @@ SCHEMA_INDEXES = [
 
 
 def get_connection(db_path: str | None = None) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path or DB_PATH)
+    conn = sqlite3.connect(db_path or DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA foreign_keys=ON;")
@@ -127,5 +136,10 @@ def init_db(db_path: str | None = None) -> sqlite3.Connection:
         conn.execute(schema)
     for idx in SCHEMA_INDEXES:
         conn.execute(idx)
+    for migration in SCHEMA_MIGRATIONS:
+        try:
+            conn.execute(migration)
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     return conn

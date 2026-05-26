@@ -13,12 +13,19 @@ cfg = st.session_state.config
 db: Database = st.session_state.db
 
 st.title("📊 Weekly Reports")
+st.caption("Generate and download weekly intelligence reports.")
+
+st.divider()
 
 col1, col2 = st.columns([3, 1])
 
+with col1:
+    reports = db.list_reports()
+    st.metric("Total Reports", len(reports))
+
 with col2:
-    st.subheader("Generate Report")
-    if st.button("Generate This Week's Report", type="primary", use_container_width=True):
+    st.subheader("Generate")
+    if st.button("📄 Generate This Week", type="primary", use_container_width=True):
         with st.status("Generating weekly report...") as status:
             try:
                 from app.storage.files import FileManager
@@ -39,39 +46,40 @@ with col2:
                 else:
                     st.success(f"Report generated! {result['source_count']} sources included.")
                     st.session_state["last_report"] = result
+                    st.rerun()
 
             except Exception as e:
                 st.error(f"Report generation failed: {e}")
 
-reports = db.list_reports()
-
 if not reports:
     st.info("No reports yet. Generate your first weekly report.")
 else:
+    st.divider()
     for report in reports:
-        with st.expander(f"{report['week_start']} to {report['week_end']} — {report.get('title', 'Untitled')[:60]}"):
-            c = st.columns([1, 1, 2])
-            c[0].metric("Sources", report["source_count"])
-            c[1].write(f"Created: {report['created_at'][:10]}")
+        rid = report["id"]
+        with st.container(border=True):
+            cols = st.columns([3, 1, 1, 1, 1])
+            cols[0].markdown(f"**{report['week_start']} → {report['week_end']}**")
+            cols[1].metric("Sources", report["source_count"], border=False)
+            cols[2].write(f"📅 {report['created_at'][:10]}")
 
-            if report.get("local_pdf_path") and Path(report["local_pdf_path"]).exists():
+            has_pdf = report.get("local_pdf_path") and Path(report["local_pdf_path"]).exists()
+            has_md = report.get("local_md_path") and Path(report["local_md_path"]).exists()
+
+            if has_pdf:
                 with open(report["local_pdf_path"], "rb") as f:
-                    c[2].download_button(
-                        "📄 Download PDF",
-                        f,
+                    cols[3].download_button("📄 PDF", f,
                         file_name=Path(report["local_pdf_path"]).name,
-                        mime="application/pdf",
-                    )
+                        mime="application/pdf", key=f"pdf_{rid}",
+                        use_container_width=True)
 
-            if report.get("local_md_path") and Path(report["local_md_path"]).exists():
+            if has_md:
                 md_content = Path(report["local_md_path"]).read_text(encoding="utf-8")
-                c[2].download_button(
-                    "📝 Download Markdown",
-                    md_content,
+                cols[4].download_button("📝 MD", md_content,
                     file_name=Path(report["local_md_path"]).name,
-                    mime="text/markdown",
-                )
+                    mime="text/markdown", key=f"md_{rid}",
+                    use_container_width=True)
 
             if report.get("executive_summary"):
-                st.subheader("Executive Summary")
-                st.markdown(report["executive_summary"])
+                with st.expander("📋 View Executive Summary"):
+                    st.markdown(report["executive_summary"])

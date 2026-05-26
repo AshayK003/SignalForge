@@ -7,11 +7,21 @@ from app.summarization.llm_client import LLMClient
 from app.summarization.prompts import PromptLibrary
 
 
+_PACE_X_SYSTEM: str | None = None
+
+
+def _pace_x_prompt(prompts: PromptLibrary) -> str:
+    global _PACE_X_SYSTEM
+    if _PACE_X_SYSTEM is None:
+        _PACE_X_SYSTEM = prompts.load("pace_x_system")
+    return _PACE_X_SYSTEM
+
+
 class SummarizationPipeline:
     def __init__(self, llm: LLMClient, prompts: PromptLibrary, logger: Any = None):
         self.llm = llm
         self.prompts = prompts
-        self.log = logger
+        self.log = logger.info if logger else None
 
     def process(self, text: str, source_title: str = "",
                 max_chunk_size: int = 3000, overlap: int = 300) -> dict:
@@ -19,7 +29,8 @@ class SummarizationPipeline:
 
         if not chunks:
             return {"summary": "", "insights": [], "action_items": [], "key_quotes": [],
-                    "themes": [], "technical_concepts": [], "opportunities": [], "contradictions": []}
+                    "themes": [], "technical_concepts": [], "opportunities": [],
+                    "contradictions": [], "why_it_matters": "", "open_questions": []}
 
         chunk_summaries = []
         for chunk in chunks:
@@ -27,20 +38,21 @@ class SummarizationPipeline:
             chunk_summaries.append(result)
 
         if len(chunk_summaries) == 1:
-            return chunk_summaries[0]
+            result = chunk_summaries[0]
+        else:
+            result = self._synthesize(chunk_summaries, source_title)
 
-        return self._synthesize(chunk_summaries, source_title)
+        return self._fill_defaults(result)
 
     def process_structured(self, text: str, source_title: str = "",
                            max_chunk_size: int = 3000, overlap: int = 300) -> dict:
-        base = self.process(text, source_title, max_chunk_size, overlap)
-        insights = self._extract_insights(base["summary"], source_title)
-        return {**base, **insights}
+        return self.process(text, source_title, max_chunk_size, overlap)
 
     def _summarize_chunk(self, chunk: dict, title: str) -> dict:
         prompt = self.prompts.render("summarize_chunk", text=chunk["text"], title=title)
+        system = _pace_x_prompt(self.prompts)
         response = self.llm.chat([
-            {"role": "system", "content": "You are an expert analyst. Return JSON with keys: summary, insights, action_items, key_quotes, themes, technical_concepts, opportunities, contradictions."},
+            {"role": "system", "content": system},
             {"role": "user", "content": prompt},
         ])
         return self._parse_response(response)
@@ -50,16 +62,9 @@ class SummarizationPipeline:
             f"Chunk {i+1}:\n{s.get('summary', '')}" for i, s in enumerate(chunk_summaries)
         )
         prompt = self.prompts.render("synthesize", summaries=summaries_text, title=title)
+        system = _pace_x_prompt(self.prompts)
         response = self.llm.chat([
-            {"role": "system", "content": "You are an expert analyst synthesizing multiple summaries. Return JSON with keys: summary, insights, action_items, key_quotes, themes, technical_concepts, opportunities, contradictions."},
-            {"role": "user", "content": prompt},
-        ])
-        return self._parse_response(response)
-
-    def _extract_insights(self, summary: str, title: str) -> dict:
-        prompt = self.prompts.render("extract_insights", summary=summary, title=title)
-        response = self.llm.chat([
-            {"role": "system", "content": "You extract deep insights, contradictions, and opportunities from content. Return JSON with keys: why_it_matters, suggested_next_actions, startup_opportunities, recurring_themes."},
+            {"role": "system", "content": system},
             {"role": "user", "content": prompt},
         ])
         return self._parse_response(response)
@@ -75,7 +80,8 @@ class SummarizationPipeline:
             if self.log:
                 self.log("Warning: LLM response was not valid JSON, treating as plain text")
             return {
-                "summary": response,
+                "summary": response[:5000],
+                "core_ideas": [],
                 "insights": [],
                 "action_items": [],
                 "key_quotes": [],
@@ -83,4 +89,22 @@ class SummarizationPipeline:
                 "technical_concepts": [],
                 "opportunities": [],
                 "contradictions": [],
+                "why_it_matters": "",
+                "open_questions": [],
             }
+
+    def _fill_defaults(self, result: dict) -> dict:
+        defaults = {
+            "summary": "",
+            "core_ideas": [],
+            "insights": [],
+            "action_items": [],
+            "key_quotes": [],
+            "themes": [],
+            "technical_concepts": [],
+            "opportunities": [],
+            "contradictions": [],
+            "why_it_matters": "",
+            "open_questions": [],
+        }
+        return {**defaults, **result}

@@ -6,7 +6,7 @@ import httpx
 class LLMClient:
     def __init__(self, config: Any, logger: Any = None):
         self.config = config
-        self.log = logger
+        self.log = logger.info if logger else None
 
     @property
     def _base_url(self) -> str:

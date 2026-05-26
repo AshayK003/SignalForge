@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -6,9 +7,9 @@ from faster_whisper import WhisperModel
 
 
 class Transcriber:
-    def __init__(self, model_size: str = "base", device: str = "auto",
-                 compute_type: str = "int8", logger: Any = None):
-        self.log = logger
+    def __init__(self, model_size: str = "base", device: str = "cpu",
+                 compute_type: str = "float32", logger: Any = None):
+        self.log = logger.info if logger else None
         self._model: WhisperModel | None = None
         self.model_size = model_size
         self.device = device
@@ -16,9 +17,27 @@ class Transcriber:
 
     def _get_model(self) -> WhisperModel:
         if self._model is None:
-            if self.log:
-                self.log(f"Loading faster-whisper model '{self.model_size}' (device={self.device})")
-            self._model = WhisperModel(self.model_size, device=self.device, compute_type=self.compute_type)
+            configs = [
+                (self.device, self.compute_type),
+                ("cpu", "float32"),
+                ("cpu", "int8"),
+            ]
+            last_error = None
+            for device, compute_type in configs:
+                try:
+                    if self.log:
+                        self.log(f"Loading faster-whisper model '{self.model_size}' "
+                                 f"(device={device}, compute={compute_type})")
+                    self._model = WhisperModel(self.model_size, device=device, compute_type=compute_type)
+                    self.device = device
+                    self.compute_type = compute_type
+                    return self._model
+                except (OSError, RuntimeError) as e:
+                    last_error = e
+                    if self.log:
+                        self.log(f"Failed with device={device}, compute={compute_type}: {e}")
+                    continue
+            raise RuntimeError(f"Could not load whisper model: {last_error}")
         return self._model
 
     def transcribe(self, audio_path: str | Path) -> dict:

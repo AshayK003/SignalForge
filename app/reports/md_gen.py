@@ -5,6 +5,9 @@ def generate_markdown(title: str, week_start: str, week_end: str,
                       executive_summary: str, source_count: int,
                       insights: list, action_items: list, quotes: list,
                       themes: list, opportunities: list, contradictions: list,
+                      core_ideas: list | None = None,
+                      why_it_matters: list | None = None,
+                      open_questions: list | None = None,
                       sources: list | None = None) -> str:
     lines = []
     lines.append(f"# {title}")
@@ -21,6 +24,13 @@ def generate_markdown(title: str, week_start: str, week_end: str,
     lines.append(executive_summary)
     lines.append("")
 
+    if core_ideas:
+        lines.append("## Core Ideas")
+        lines.append("")
+        for idea in core_ideas:
+            lines.append(f"- {idea}")
+        lines.append("")
+
     if themes:
         lines.append("## Recurring Themes")
         lines.append("")
@@ -35,15 +45,22 @@ def generate_markdown(title: str, week_start: str, week_end: str,
             lines.append(f"{i}. {insight}")
         lines.append("")
 
+    if contradictions:
+        lines.append("## Contrarian / Surprising Points")
+        lines.append("")
+        for c in contradictions:
+            lines.append(f"- {c}")
+        lines.append("")
+
     if action_items:
-        lines.append("## Action Items")
+        lines.append("## Actionable Takeaways")
         lines.append("")
         for a in action_items:
             lines.append(f"- [ ] {a}")
         lines.append("")
 
     if quotes:
-        lines.append("## Important Quotes")
+        lines.append("## Key Quotes")
         lines.append("")
         for q in quotes:
             lines.append(f"> {q}")
@@ -53,16 +70,27 @@ def generate_markdown(title: str, week_start: str, week_end: str,
         lines.append("## Opportunities")
         lines.append("")
         for o in opportunities:
-            lines.append(f"- **{o.get('opportunity', o)}**")
-            if isinstance(o, dict) and o.get("why"):
-                lines.append(f"  - *Why:* {o['why']}")
+            if isinstance(o, dict):
+                text = o.get("opportunity", str(o))
+                lines.append(f"- **{text}**")
+                if o.get("why"):
+                    lines.append(f"  - *Why:* {o['why']}")
+            else:
+                lines.append(f"- **{o}**")
         lines.append("")
 
-    if contradictions:
-        lines.append("## Contradictions & Tensions")
+    if why_it_matters:
+        lines.append("## Why This Matters")
         lines.append("")
-        for c in contradictions:
-            lines.append(f"- {c}")
+        for w in why_it_matters:
+            lines.append(f"- {w}")
+        lines.append("")
+
+    if open_questions:
+        lines.append("## Open Questions")
+        lines.append("")
+        for q in open_questions:
+            lines.append(f"- {q}")
         lines.append("")
 
     if sources:

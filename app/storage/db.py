@@ -97,23 +97,25 @@ class Database:
     # --- Summaries ---
 
     def insert_summary(self, source_id: int, level: str, summary_text: str,
-                       insights: list | None = None, action_items: list | None = None,
-                       key_quotes: list | None = None, themes: list | None = None,
-                       technical_concepts: list | None = None, opportunities: list | None = None,
-                       contradictions: list | None = None,
+                       core_ideas: list | None = None, insights: list | None = None,
+                       action_items: list | None = None, key_quotes: list | None = None,
+                       themes: list | None = None, technical_concepts: list | None = None,
+                       opportunities: list | None = None, contradictions: list | None = None,
+                       why_it_matters: str = "", open_questions: list | None = None,
                        model_used: str | None = None, chunk_index: int | None = None,
                        parent_summary_id: int | None = None) -> int:
         cur = self._conn.execute(
             """INSERT INTO summaries
-               (source_id, level, parent_summary_id, summary_text, insights, action_items,
+               (source_id, level, parent_summary_id, summary_text, core_ideas, insights, action_items,
                 key_quotes, themes, technical_concepts, opportunities, contradictions,
-                model_used, chunk_index)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                why_it_matters, open_questions, model_used, chunk_index)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (source_id, level, parent_summary_id, summary_text,
-             json.dumps(insights or []), json.dumps(action_items or []),
-             json.dumps(key_quotes or []), json.dumps(themes or []),
-             json.dumps(technical_concepts or []), json.dumps(opportunities or []),
-             json.dumps(contradictions or []), model_used, chunk_index),
+             json.dumps(core_ideas or []), json.dumps(insights or []),
+             json.dumps(action_items or []), json.dumps(key_quotes or []),
+             json.dumps(themes or []), json.dumps(technical_concepts or []),
+             json.dumps(opportunities or []), json.dumps(contradictions or []),
+             why_it_matters, json.dumps(open_questions or []), model_used, chunk_index),
         )
         self._conn.commit()
         return cur.lastrowid

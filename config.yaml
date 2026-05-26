@@ -11,9 +11,9 @@ chunking:
   overlap: 300
 
 transcription:
-  model: base
-  device: auto
-  compute_type: int8
+  model: tiny
+  device: cpu
+  compute_type: float32
 
 report:
   max_sources_per_report: 50
