@@ -1,25 +1,27 @@
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
 
 import os
 
-from app.utils.helpers import safe_filename
+from app.utils.deps import DENO_PATH, FFMPEG_PATH, extended_env
 
-DENO_PATH = "C:\\Users\\Ashay\\AppData\\Local\\Microsoft\\WinGet\\Packages\\DenoLand.Deno_Microsoft.Winget.Source_8wekyb3d8bbwe"
-FFMPEG_PATH = "C:\\Users\\Ashay\\AppData\\Local\\Microsoft\\WinGet\\Packages\\yt-dlp.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-N-124279-g0f6ba39122-win64-gpl\\bin"
+_COOKIES_FILE = Path(os.getenv("SIGNALFORGE_DATA_DIR", "./data")) / "cookies.txt"
+
+_YTDLP_BASE = [
+    "yt-dlp",
+    "--remote-components", "ejs:github",
+    "--extractor-args", "youtube:skip=web_safari",
+]
 
 
-def get_env() -> dict:
-    env = os.environ.copy()
-    paths = [DENO_PATH, FFMPEG_PATH]
-    env_path = env.get("PATH", "")
-    for p in paths:
-        if p not in env_path:
-            env_path = f"{p};{env_path}"
-    env["PATH"] = env_path
-    return env
+def _build_cmd(*args: str) -> list[str]:
+    cmd = _YTDLP_BASE + list(args)
+    if _COOKIES_FILE.exists():
+        cmd += ["--cookies", str(_COOKIES_FILE)]
+    return cmd
 
 
 def download_audio(url: str, output_dir: str | Path, logger: Any = None,
@@ -38,19 +40,18 @@ def download_audio(url: str, output_dir: str | Path, logger: Any = None,
 
     output_template = str(output_dir / "%(id)s.%(ext)s")
 
-    cmd = [
-        "yt-dlp",
+    cmd = _build_cmd(
         "-x", "--audio-format", "mp3",
         "--audio-quality", "0",
         "-o", output_template,
         "--ffmpeg-location", ffmpeg_path or FFMPEG_PATH,
         url,
-    ]
+    )
 
     log = logger.debug if logger else print
     log(f"Downloading: {title} ({duration}s)")
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, env=get_env())
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, env=extended_env())
 
     if result.returncode != 0:
         raise RuntimeError(f"yt-dlp download failed: {result.stderr.strip()}")
@@ -79,8 +80,8 @@ def download_audio(url: str, output_dir: str | Path, logger: Any = None,
 
 
 def extract_metadata(url: str) -> dict:
-    cmd = ["yt-dlp", "--dump-json", url]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=get_env())
+    cmd = _build_cmd("--dump-json", url)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=extended_env())
 
     if result.returncode != 0:
         raise RuntimeError(f"yt-dlp metadata extraction failed: {result.stderr.strip()}")
@@ -90,7 +91,6 @@ def extract_metadata(url: str) -> dict:
 
 def get_captions(url: str, output_dir: str | Path | None = None,
                  logger: Any = None) -> dict | None:
-    import re
     from youtube_transcript_api import YouTubeTranscriptApi
     from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
 
@@ -132,7 +132,6 @@ def get_captions(url: str, output_dir: str | Path | None = None,
 
 
 def _extract_video_id(url: str) -> str | None:
-    import re
     patterns = [
         r"v=([a-zA-Z0-9_-]{11})",
         r"youtu\.be/([a-zA-Z0-9_-]{11})",

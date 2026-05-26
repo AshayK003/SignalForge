@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+import json
+import re
 from typing import Any
 
 from app.reports.md_gen import generate_markdown
@@ -18,6 +19,29 @@ class ReportGenerator:
         self.llm = llm
         self.prompts = prompts
         self.log = logger.info if logger else None
+
+    @staticmethod
+    def _parse_report_response(response: str) -> dict:
+        json_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", response)
+        if json_match:
+            response = json_match.group(1).strip()
+        try:
+            data = json.loads(response)
+            return {
+                "executive_summary": data.get("executive_summary", response),
+                "key_developments": data.get("key_developments", []),
+                "cross_source_connections": data.get("cross_source_connections", []),
+                "recommended_actions": data.get("recommended_actions", []),
+                "signals_to_monitor": data.get("signals_to_monitor", []),
+            }
+        except (json.JSONDecodeError, TypeError):
+            return {
+                "executive_summary": response,
+                "key_developments": [],
+                "cross_source_connections": [],
+                "recommended_actions": [],
+                "signals_to_monitor": [],
+            }
 
     def generate_weekly(self, week_start: str | None = None,
                         week_end: str | None = None) -> dict:
@@ -71,10 +95,19 @@ class ReportGenerator:
             source_count=len(source_ids),
         )
 
-        executive_summary = self.llm.chat([
+        raw_response = self.llm.chat([
             {"role": "system", "content": "You are an executive intelligence analyst. Write a comprehensive weekly report."},
             {"role": "user", "content": report_prompt},
         ])
+
+        parsed = self._parse_report_response(raw_response)
+        executive_summary = parsed["executive_summary"]
+        report_sections = {
+            "key_developments": parsed["key_developments"],
+            "cross_source_connections": parsed["cross_source_connections"],
+            "recommended_actions": parsed["recommended_actions"],
+            "signals_to_monitor": parsed["signals_to_monitor"],
+        }
 
         week_title = f"Weekly Intelligence Report: {week_start} to {week_end}"
 
@@ -94,6 +127,7 @@ class ReportGenerator:
             why_it_matters=why_it_matters_list,
             open_questions=all_open_questions,
             sources=[self.db.get_source(sid) for sid in source_ids],
+            report_sections=report_sections,
         )
 
         md_path = self.files.save_report(
@@ -112,6 +146,7 @@ class ReportGenerator:
             themes=list(all_themes),
             opportunities=all_opportunities,
             contradictions=all_contradictions,
+            report_sections=report_sections,
         )
 
         pdf_path = self.files.save_report(

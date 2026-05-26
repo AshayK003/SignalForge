@@ -8,7 +8,8 @@ def generate_markdown(title: str, week_start: str, week_end: str,
                       core_ideas: list | None = None,
                       why_it_matters: list | None = None,
                       open_questions: list | None = None,
-                      sources: list | None = None) -> str:
+                      sources: list | None = None,
+                      report_sections: dict | None = None) -> str:
     lines = []
     lines.append(f"# {title}")
     lines.append("")
@@ -23,6 +24,21 @@ def generate_markdown(title: str, week_start: str, week_end: str,
     lines.append("")
     lines.append(executive_summary)
     lines.append("")
+
+    if report_sections:
+        for heading, key in [
+            ("Key Developments", "key_developments"),
+            ("Cross-Source Connections", "cross_source_connections"),
+            ("Recommended Actions", "recommended_actions"),
+            ("Signals to Monitor", "signals_to_monitor"),
+        ]:
+            items = report_sections.get(key, [])
+            if items:
+                lines.append(f"## {heading}")
+                lines.append("")
+                for item in items:
+                    lines.append(f"- {item}")
+                lines.append("")
 
     if core_ideas:
         lines.append("## Core Ideas")

@@ -7,7 +7,7 @@ DB_PATH = os.getenv("SIGNALFORGE_DB", str(Path(__file__).parent / "signalforge.d
 SCHEMA_SOURCES = """
 CREATE TABLE IF NOT EXISTS sources (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source_type TEXT NOT NULL CHECK(source_type IN ('youtube','pdf','text','audio')),
+    source_type TEXT NOT NULL CHECK(source_type IN ('youtube','pdf','text','audio','youtube_batch','manual')),
     title TEXT NOT NULL DEFAULT '',
     url TEXT,
     file_path TEXT,
@@ -112,6 +112,37 @@ SCHEMA_MIGRATIONS = [
     "ALTER TABLE summaries ADD COLUMN open_questions TEXT DEFAULT '[]';",
 ]
 
+
+def _migrate_source_type_constraint(conn: sqlite3.Connection):
+    """Recreate sources table to add 'youtube_batch' and 'manual' to the CHECK constraint."""
+    cursor = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='sources';")
+    row = cursor.fetchone()
+    if not row:
+        return
+    sql = row["sql"]
+    if "youtube_batch" in sql:
+        return  # already migrated
+    conn.executescript("""
+        PRAGMA foreign_keys=OFF;
+        CREATE TABLE sources_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_type TEXT NOT NULL CHECK(source_type IN ('youtube','pdf','text','audio','youtube_batch','manual')),
+            title TEXT NOT NULL DEFAULT '',
+            url TEXT,
+            file_path TEXT,
+            file_size INTEGER,
+            metadata TEXT DEFAULT '{}',
+            ingested_at TEXT NOT NULL DEFAULT (datetime('now')),
+            status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','processing','completed','failed')),
+            error TEXT
+        );
+        INSERT INTO sources_new SELECT * FROM sources;
+        DROP TABLE sources;
+        ALTER TABLE sources_new RENAME TO sources;
+        PRAGMA foreign_keys=ON;
+    """)
+    conn.commit()
+
 SCHEMA_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_sources_status ON sources(status);",
     "CREATE INDEX IF NOT EXISTS idx_sources_ingested ON sources(ingested_at);",
@@ -123,10 +154,11 @@ SCHEMA_INDEXES = [
 
 
 def get_connection(db_path: str | None = None) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path or DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(db_path or DB_PATH, check_same_thread=False, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA foreign_keys=ON;")
+    conn.execute("PRAGMA busy_timeout=5000;")
     return conn
 
 
@@ -141,5 +173,6 @@ def init_db(db_path: str | None = None) -> sqlite3.Connection:
             conn.execute(migration)
         except sqlite3.OperationalError:
             pass
+    _migrate_source_type_constraint(conn)
     conn.commit()
     return conn

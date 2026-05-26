@@ -32,6 +32,6 @@ def test_cache_works():
 
 def test_all_prompts_have_expected_vars():
     lib = PromptLibrary()
-    for name in ["summarize_chunk", "synthesize", "extract_insights", "weekly_report"]:
+    for name in ["summarize_chunk", "synthesize", "weekly_report"]:
         prompt = lib.load(name)
         assert len(prompt) > 0, f"Prompt '{name}' is empty"

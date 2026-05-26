@@ -4,10 +4,11 @@ You are generating a weekly intelligence report for {week_start} to {week_end}.
 
 {sources}
 
-Write an executive synthesis that covers:
-1. The most important developments this week
-2. How ideas connect across different sources
-3. Key decisions or actions that should follow
-4. Any patterns or signals worth monitoring
+Produce a structured report as JSON with these keys:
+- "executive_summary": a high-density narrative synthesis of the most important developments this week
+- "key_developments": list of the most significant developments, ordered by importance
+- "cross_source_connections": list of notable connections or contradictions between sources
+- "recommended_actions": list of concrete decisions or actions that should follow
+- "signals_to_monitor": list of patterns, trends, or signals worth watching
 
-Format as a clear, insightful narrative. Do not just list summaries — synthesize.
+Make the synthesis insightful and cross-referenced. Do not just list summaries.

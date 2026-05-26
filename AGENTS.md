@@ -135,7 +135,7 @@ Set `LLM_PROVIDER=ollama` in `.env`. The client auto-switches base URL and model
 
 **Customize a page's UI/UX:**
 Each page in `pages/` uses Streamlit containers, tabs, columns, and expanders. The
-`app/ui/components.py` module provides reusable `render_summary()` and `render_source_card()`.
+`app/ui/components.py` module provides the reusable `render_summary()` component.
 To change layout, edit the page file directly — no routing or state management needed.
 
 **Batch YouTube processing:**

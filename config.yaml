@@ -12,7 +12,7 @@ chunking:
 
 transcription:
   model: tiny
-  device: cpu
+  device: auto
   compute_type: float32
 
 report:
@@ -20,6 +20,14 @@ report:
   output_formats:
     - pdf
     - markdown
+
+deps:
+  # Override paths to yt-dlp/FFmpeg/Tesseract/Poppler if auto-detection fails.
+  # Leave empty to use built-in defaults.
+  deno_path: ""
+  ffmpeg_path: ""
+  tesseract_cmd: ""
+  poppler_bin: ""
 
 logging:
   level: INFO

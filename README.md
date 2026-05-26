@@ -62,7 +62,7 @@ streamlit_app.py → 5 UI pages (Streamlit multipage)
   │   ├─ reports/          Weekly aggregation → fpdf2 PDF + Markdown
   │   ├─ storage/          SQLite (7 tables, WAL mode) + file manager
   │   ├─ cloud/            rclone upload wrapper
-  │   ├─ ui/               Reusable components (render_summary, render_source_card)
+  │   ├─ ui/               Reusable components (render_summary)
   │   └─ utils/            Config (YAML + .env), logging, helpers
   ├─ database/schema.py    Schema + migrations (7 tables, indexes)
   ├─ prompts/              LLM prompt templates (Markdown)

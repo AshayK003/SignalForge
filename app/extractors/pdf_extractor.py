@@ -1,31 +1,10 @@
-import os
 from pathlib import Path
 from typing import Any
 
 from pypdf import PdfReader
 from PIL import Image
 
-_TESSERACT_CMD = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-_POPPLER_BIN = (
-    r"C:\Users\Ashay\AppData\Local\Microsoft\WinGet\Packages"
-    r"\oschwartz10612.Poppler_Microsoft.Winget.Source_8wekyb3d8bbwe"
-    r"\poppler-25.07.0\Library\bin"
-)
-
-
-def _ensure_deps():
-    for p in [_POPPLER_BIN, os.path.dirname(_TESSERACT_CMD)]:
-        if p not in os.environ.get("PATH", "") and os.path.isdir(p):
-            os.environ["PATH"] = p + os.pathsep + os.environ.get("PATH", "")
-    import pytesseract
-    pytesseract.pytesseract.tesseract_cmd = _TESSERACT_CMD
-    if not os.path.exists(_TESSERACT_CMD):
-        raise RuntimeError(
-            "Tesseract OCR engine not found at expected path. "
-            "This PDF contains no extractable text (likely image-based). "
-            "Install Tesseract from: "
-            "https://github.com/UB-Mannheim/tesseract/releases"
-        )
+from app.utils.deps import ensure_local_paths
 
 
 def extract_text(pdf_path: str | Path, use_ocr_fallback: bool = True,
@@ -57,7 +36,7 @@ def extract_text(pdf_path: str | Path, use_ocr_fallback: bool = True,
 
 
 def _ocr_fallback(pdf_path: Path, logger: Any = None) -> dict:
-    _ensure_deps()
+    ensure_local_paths()
     import pytesseract
 
     images = _pdf_to_images(pdf_path)

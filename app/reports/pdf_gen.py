@@ -1,11 +1,51 @@
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from fpdf import FPDF
 
+
+def strip_markdown(text: str) -> str:
+    text = re.sub(r'!\[([^\]]*)\]\([^)]+\)', r'\1', text)
+    text = re.sub(r'\[([^\]]*)\]\([^)]+\)', r'\1', text)
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'[*_]{2}([^*_]+)[*_]{2}', r'\1', text)
+    text = re.sub(r'[*_]([^*_]+)[*_](?!\*)', r'\1', text)
+    text = re.sub(r'`{1,3}([^`]+)`{1,3}', r'\1', text)
+    text = re.sub(r'^>\s?', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^[\s]*[-*+]\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*\d+[.)]\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^-{3,}\s*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
 FONT_DIR = Path(os.environ.get("WINDIR", "C:\\Windows")) / "Fonts"
 
 _FONTS = {
+    "georgia": {
+        "regular": str(FONT_DIR / "georgia.ttf"),
+        "bold": str(FONT_DIR / "georgiab.ttf"),
+        "italic": str(FONT_DIR / "georgiai.ttf"),
+        "bold_italic": str(FONT_DIR / "georgiaz.ttf"),
+    },
+    "constantia": {
+        "regular": str(FONT_DIR / "constan.ttf"),
+        "bold": str(FONT_DIR / "constanb.ttf"),
+        "italic": str(FONT_DIR / "constani.ttf"),
+        "bold_italic": str(FONT_DIR / "constanz.ttf"),
+    },
+    "cambria": {
+        "regular": str(FONT_DIR / "cambria.ttc"),
+        "bold": str(FONT_DIR / "cambriab.ttf"),
+        "italic": str(FONT_DIR / "cambriai.ttf"),
+        "bold_italic": str(FONT_DIR / "cambriaz.ttf"),
+    },
+    "calibri": {
+        "regular": str(FONT_DIR / "calibri.ttf"),
+        "bold": str(FONT_DIR / "calibrib.ttf"),
+        "italic": str(FONT_DIR / "calibrii.ttf"),
+        "bold_italic": str(FONT_DIR / "calibriz.ttf"),
+    },
     "segoe": {
         "regular": str(FONT_DIR / "segoeui.ttf"),
         "bold": str(FONT_DIR / "segoeuib.ttf"),
@@ -30,7 +70,7 @@ def _find_unicode_font() -> str:
     for name, paths in _FONTS.items():
         if os.path.exists(paths["regular"]):
             return name
-    raise RuntimeError("No Unicode font found. Install Segoe UI or Arial.")
+    raise RuntimeError("No Unicode font found. Install Georgia, Constantia, Cambria, Calibri, Segoe UI, or Arial.")
 
 
 class ReportPDF(FPDF):
@@ -74,30 +114,30 @@ class ReportPDF(FPDF):
         self.line(LMARGIN, self.get_y(), LMARGIN + 30, self.get_y())
         self.ln(4)
 
+    LH = 6.5
+
     def body_text(self, text: str):
-        self.set_font("Uni", "", 10)
+        self.set_font("Uni", "", 10.5)
         self.set_text_color(26, 26, 26)
-        self.multi_cell(0, 5.5, text)
+        self.multi_cell(0, self.LH, text)
         self.ln(2)
 
     def _bullet_item(self, text: str, marker: str = "-"):
-        x0 = self.get_x()
-        self.set_font("Uni", "", 10)
+        self.set_font("Uni", "", 10.5)
         self.set_text_color(26, 26, 26)
         self.cell(INDENT)
-        self.cell(5, 5.5, marker)
+        self.cell(5, self.LH, marker)
         w = EFFECTIVE_W - INDENT - 5
-        self.multi_cell(w, 5.5, text)
+        self.multi_cell(w, self.LH, text)
         self.ln(1)
 
     def _number_item(self, num: int, text: str):
-        x0 = self.get_x()
-        self.set_font("Uni", "", 10)
+        self.set_font("Uni", "", 10.5)
         self.set_text_color(26, 26, 26)
         self.cell(INDENT)
-        self.cell(5, 5.5, f"{num}.")
+        self.cell(5, self.LH, f"{num}.")
         w = EFFECTIVE_W - INDENT - 5
-        self.multi_cell(w, 5.5, text)
+        self.multi_cell(w, self.LH, text)
         self.ln(1)
 
     def bullet_list(self, items: list):
@@ -118,24 +158,24 @@ class ReportPDF(FPDF):
     def quote_list(self, quotes: list):
         for q in quotes:
             self.set_fill_color(249, 250, 251)
-            self.set_font("Uni", "I", 10)
+            self.set_font("Uni", "I", 10.5)
             self.set_text_color(75, 85, 99)
             self.cell(INDENT)
-            self.multi_cell(EFFECTIVE_W - INDENT, 5.5, f'"{q}"', fill=True)
+            self.multi_cell(EFFECTIVE_W - INDENT, self.LH, f'"{q}"', fill=True)
             self.ln(2)
 
     def meta_line(self, label: str, value: str):
-        self.set_font("Uni", "B", 10)
+        self.set_font("Uni", "B", 10.5)
         self.set_text_color(80, 80, 80)
         self.cell(20, 6, label)
-        self.set_font("Uni", "", 10)
+        self.set_font("Uni", "", 10.5)
         self.set_text_color(26, 26, 26)
         self.cell(0, 6, value, new_x="LMARGIN", new_y="NEXT")
 
     def theme_tags(self, themes: list):
         x_start = LMARGIN + INDENT
         self.set_x(x_start)
-        self.set_font("Uni", "", 9)
+        self.set_font("Uni", "B", 10)
         for i, t in enumerate(themes):
             label = f"  {t}  "
             tw = self.get_string_width(label) + 2
@@ -151,9 +191,9 @@ class ReportPDF(FPDF):
     def summary_block(self, text: str):
         self.set_fill_color(240, 247, 255)
         self.set_draw_color(37, 99, 235)
-        self.set_font("Uni", "", 10)
+        self.set_font("Uni", "", 10.5)
         self.set_text_color(26, 26, 26)
-        self.multi_cell(0, 5.5, text, fill=True)
+        self.multi_cell(0, self.LH, text, fill=True)
         self.ln(2)
 
     def cover_page(self, title: str, week_start: str, week_end: str,
@@ -178,7 +218,7 @@ class ReportPDF(FPDF):
         self.set_text_color(37, 99, 235)
         self.cell(0, 8, f"{source_count} source{'s' if source_count != 1 else ''}", align="C", new_x="LMARGIN", new_y="NEXT")
         self.ln(8)
-        self.set_font("Uni", "", 10)
+        self.set_font("Uni", "", 10.5)
         self.set_text_color(156, 163, 175)
         self.cell(0, 6, f"Generated {datetime.now().strftime('%B %d, %Y at %H:%M')}", align="C", new_x="LMARGIN", new_y="NEXT")
         self.set_font("Uni", "I", 9)
@@ -188,7 +228,8 @@ class ReportPDF(FPDF):
 def generate_pdf(title: str, week_start: str, week_end: str,
                  executive_summary: str, source_count: int,
                  insights: list, action_items: list, quotes: list,
-                 themes: list, opportunities: list, contradictions: list) -> bytes:
+                 themes: list, opportunities: list, contradictions: list,
+                 report_sections: dict | None = None) -> bytes:
     pdf = ReportPDF()
     pdf.alias_nb_pages()
 
@@ -196,7 +237,20 @@ def generate_pdf(title: str, week_start: str, week_end: str,
 
     pdf.add_page()
     pdf.section_title("Executive Summary")
-    pdf.summary_block(executive_summary)
+    clean = strip_markdown(executive_summary)
+    pdf.summary_block(clean)
+
+    if report_sections:
+        for heading, key in [
+            ("Key Developments", "key_developments"),
+            ("Cross-Source Connections", "cross_source_connections"),
+            ("Recommended Actions", "recommended_actions"),
+            ("Signals to Monitor", "signals_to_monitor"),
+        ]:
+            items = report_sections.get(key, [])
+            if items:
+                pdf.section_title(heading)
+                pdf.bullet_list(items)
 
     if themes:
         pdf.section_title("Recurring Themes")

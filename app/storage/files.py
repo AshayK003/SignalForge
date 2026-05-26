@@ -45,7 +45,3 @@ class FileManager:
         for f in self.temp.iterdir():
             if f.is_file():
                 f.unlink()
-
-    def get_raw_path(self, filename: str) -> Path | None:
-        path = self.raw / filename
-        return path if path.exists() else None

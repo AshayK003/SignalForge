@@ -107,4 +107,4 @@ pytest tests/ -v
 - **"No module named faster_whisper"** → `pip install faster-whisper` (requires C++ build tools)
 - **"yt-dlp not found"** → `pip install yt-dlp`
 - **OCR fails** → Install Tesseract: `choco install tesseract` (Windows) or `apt install tesseract-ocr`
-- **PDF generation fails** → WeasyPrint may need additional system libs on Linux
+- **PDF generation fails** → Ensure Georgia font is installed (bundled with Windows / Microsoft Office)

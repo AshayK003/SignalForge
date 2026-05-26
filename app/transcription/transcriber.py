@@ -1,9 +1,11 @@
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 from faster_whisper import WhisperModel
+
+
+from app.utils.helpers import detect_device
 
 
 class Transcriber:
@@ -12,8 +14,8 @@ class Transcriber:
         self.log = logger.info if logger else None
         self._model: WhisperModel | None = None
         self.model_size = model_size
-        self.device = device
-        self.compute_type = compute_type
+        self.device = detect_device() if device in ("auto", "") else device
+        self.compute_type = "float16" if self.device == "cuda" else compute_type
 
     def _get_model(self) -> WhisperModel:
         if self._model is None:
