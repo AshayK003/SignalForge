@@ -1,0 +1,26 @@
+# SignalForge Configuration
+# Default values — override with .env or environment variables
+
+app:
+  name: SignalForge
+  version: 0.1.0
+  data_dir: ./data
+
+chunking:
+  max_chunk_size: 3000
+  overlap: 300
+
+transcription:
+  model: base
+  device: auto
+  compute_type: int8
+
+report:
+  max_sources_per_report: 50
+  output_formats:
+    - pdf
+    - markdown
+
+logging:
+  level: INFO
+  file: ./data/signalforge.log
