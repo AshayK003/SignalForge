@@ -30,7 +30,7 @@ def extended_env() -> dict:
     env_path = env.get("PATH", "")
     for p in paths:
         if p not in env_path:
-            env_path = f"{p};{env_path}"
+            env_path = f"{p}{os.pathsep}{env_path}"
     env["PATH"] = env_path
     return env
 

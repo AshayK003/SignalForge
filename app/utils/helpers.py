@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -19,7 +19,7 @@ def safe_filename(text: str, max_len: int = 80) -> str:
 
 
 def week_boundary(dt: datetime | None = None) -> tuple[str, str]:
-    dt = dt or datetime.now()
+    dt = dt or datetime.now(timezone.utc)
     start = dt - timedelta(days=dt.weekday())
     end = start + timedelta(days=6)
     return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")

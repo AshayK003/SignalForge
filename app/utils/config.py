@@ -84,7 +84,7 @@ def load_config(config_path: str | None = None) -> Config:
     if yaml_file.exists():
         with open(yaml_file) as f:
             raw = yaml.safe_load(f) or {}
-        for section in ["app", "chunking", "transcription", "report", "logging", "deps"]:
+        for section in ["app", "chunking", "transcription", "report", "logging", "deps", "rclone"]:
             cls_name = section.capitalize() + "Config"
             cls = globals().get(cls_name)
             if section in raw and cls:

@@ -1,6 +1,8 @@
 import asyncio
 import json
+import logging
 import os
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -10,16 +12,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+ALLOWED_USERS = set(filter(None, os.getenv("ALLOWED_USERS", "").split(",")))
 
 from app.storage.db import Database
 from app.storage.files import FileManager
 from app.summarization.chunker import chunk_text
 from app.summarization.prompts import PromptLibrary
 from app.utils.config import load_config
-from app.utils.helpers import week_boundary
+from app.utils.helpers import week_boundary, parse_json_field
 
 cfg = load_config()
 db = Database()
@@ -49,7 +54,7 @@ def gemini_chat(messages: list[dict], system_prompt: str = "",
 
     for attempt in range(3):
         try:
-            r = httpx.post(f"{GEMINI_URL}?key={GEMINI_API_KEY}", json=payload, timeout=120)
+            r = httpx.post(GEMINI_URL, headers={"x-goog-api-key": GEMINI_API_KEY}, json=payload, timeout=120)
             if r.status_code == 429:
                 wait = 5 * (2 ** attempt)
                 print(f"Gemini rate limited — waiting {wait}s")
@@ -129,11 +134,20 @@ def _format_chunk(i: int, s: dict) -> str:
 
 # ── Telegram Bot ────────────────────────────────────────────────────────
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 
+def _is_authorized(update: Update) -> bool:
+    if not ALLOWED_USERS:
+        return True
+    return str(update.effective_user.id) in ALLOWED_USERS
+
+
 async def start(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_authorized(update):
+        await update.message.reply_text("Unauthorized.")
+        return
     await update.message.reply_text(
         "📡 *SignalForge Bot*\n\n"
         "I ingest content from YouTube, text, and files — then analyze them with AI.\n\n"
@@ -150,6 +164,9 @@ async def start(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def ingest_youtube(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_authorized(update):
+        await update.message.reply_text("Unauthorized.")
+        return
     url = " ".join(ctx.args)
     if not url:
         await update.message.reply_text("Usage: `/ingest_youtube <url>`", parse_mode="Markdown")
@@ -206,10 +223,14 @@ async def ingest_youtube(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(reply, parse_mode="Markdown")
 
     except Exception as e:
-        await msg.edit_text(f"❌ Error: {e}")
+        logger.exception("ingest_youtube error")
+        await msg.edit_text("❌ Something went wrong. Check logs for details.")
 
 
 async def ingest_text_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_authorized(update):
+        await update.message.reply_text("Unauthorized.")
+        return
     text = " ".join(ctx.args)
     if not text:
         await update.message.reply_text("Usage: `/ingest_text <text>`", parse_mode="Markdown")
@@ -238,10 +259,14 @@ async def ingest_text_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(reply, parse_mode="Markdown")
 
     except Exception as e:
-        await msg.edit_text(f"❌ Error: {e}")
+        logger.exception("ingest_text error")
+        await msg.edit_text("❌ Something went wrong. Check logs for details.")
 
 
 async def handle_file(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_authorized(update):
+        await update.message.reply_text("Unauthorized.")
+        return
     msg = await update.message.reply_text("📁 Processing file...")
     try:
         file = await (update.message.document or update.message.audio or update.message.voice).get_file()
@@ -296,10 +321,14 @@ async def handle_file(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(reply, parse_mode="Markdown")
 
     except Exception as e:
-        await msg.edit_text(f"❌ Error: {e}")
+        logger.exception("handle_file error")
+        await msg.edit_text("❌ Something went wrong. Check logs for details.")
 
 
 async def summary_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_authorized(update):
+        await update.message.reply_text("Unauthorized.")
+        return
     if not ctx.args:
         await update.message.reply_text("Usage: `/summary <source_id>`", parse_mode="Markdown")
         return
@@ -327,10 +356,10 @@ async def summary_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"📝 *Summary*",
         s.get("summary_text", "")[:1500],
     ]
-    ideas = json.loads(s.get("core_ideas", "[]"))
+    ideas = parse_json_field(s.get("core_ideas", "[]"))
     if ideas:
         lines.extend(["", "💡 *Core Ideas*"] + [f"• {i}" for i in ideas[:5]])
-    actions = json.loads(s.get("action_items", "[]"))
+    actions = parse_json_field(s.get("action_items", "[]"))
     if actions:
         lines.extend(["", "✅ *Action Items*"] + [f"• {a}" for a in actions[:5]])
     why = s.get("why_it_matters", "")
@@ -343,6 +372,9 @@ async def summary_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def list_sources(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_authorized(update):
+        await update.message.reply_text("Unauthorized.")
+        return
     sources = db.list_sources(limit=15)
     if not sources:
         await update.message.reply_text("No sources yet. Use `/ingest_youtube` or `/ingest_text`.")
@@ -359,6 +391,9 @@ async def list_sources(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def report(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_authorized(update):
+        await update.message.reply_text("Unauthorized.")
+        return
     msg = await update.message.reply_text("📊 Generating weekly report...")
     try:
         from app.reports.generator import ReportGenerator
@@ -397,10 +432,14 @@ async def report(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await msg.edit_text("Report generated but no data found.")
 
     except Exception as e:
-        await msg.edit_text(f"❌ Report failed: {e}")
+        logger.exception("report error")
+        await msg.edit_text("❌ Something went wrong. Check logs for details.")
 
 
 async def search(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_authorized(update):
+        await update.message.reply_text("Unauthorized.")
+        return
     query = " ".join(ctx.args)
     if not query:
         await update.message.reply_text("Usage: `/search <query>`", parse_mode="Markdown")
@@ -419,6 +458,9 @@ async def search(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def status_cmd(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_authorized(update):
+        await update.message.reply_text("Unauthorized.")
+        return
     total = db.count_sources()
     completed = db.count_sources("completed")
     failed = db.count_sources("failed")
@@ -429,17 +471,18 @@ async def status_cmd(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
         f"✅ Completed: {completed}\n"
         f"❌ Failed: {failed}\n"
         f"📊 Reports: {len(reports_list)}\n"
-        f"🤖 LLM: Gemini 2.0 Flash",
+        f"🤖 LLM: Gemini ({GEMINI_MODEL})",
         parse_mode="Markdown",
     )
 
 
-import re as _re
-
-_YOUTUBE_RE = _re.compile(r"(https?://)?(www\.)?(youtube\.com|youtu\.be)/\S+", _re.I)
+_YOUTUBE_RE = re.compile(r"(https?://)?(www\.)?(youtube\.com|youtu\.be)/\S+", re.I)
 
 
 async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _is_authorized(update):
+        await update.message.reply_text("Unauthorized.")
+        return
     text = update.message.text.strip()
     youtube_match = _YOUTUBE_RE.search(text)
     if youtube_match:
@@ -450,8 +493,16 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await ingest_text_cmd(update, ctx)
     else:
         response = gemini_chat(
-            [{"role": "user", "content": f"Reply concisely and helpfully to: {text}"}],
-            temperature=0.5, max_tokens=300,
+            [{"role": "user", "content": text}],
+            system_prompt=(
+                "You are Hermes, the SignalForge AI agent — an elite research analyst "
+                "and knowledge intelligence system. You are precise, analytical, and "
+                "information-dense. You help the user ingest, analyze, and synthesize "
+                "content from YouTube, PDFs, audio, and text using the PACE-X framework. "
+                "Respond concisely with strong structure. Identify yourself as Hermes "
+                "when asked who you are."
+            ),
+            temperature=0.5, max_tokens=500,
         )
         await update.message.reply_text(response)
 
