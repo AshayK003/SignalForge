@@ -19,7 +19,7 @@ Local-first AI knowledge digest system. Transform YouTube videos, PDFs, audio fi
 .\start_hermes.bat
 ```
 
-This starts the Hermes Agent gateway, which connects to Telegram and provides the full AI agent experience with tools, memory, and skills.
+This starts the Hermes gateway, which connects to Telegram and provides tools, memory, and skills for research assistance.
 
 ### Option 2: Direct Bot
 
