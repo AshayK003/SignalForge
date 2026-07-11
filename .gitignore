@@ -10,6 +10,3 @@ data/
 bot_out.txt
 bot_err.txt
 .pytest_cache/
-hermes_stdout.txt
-hermes_stderr.txt
-AGENTS.md
