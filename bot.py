@@ -534,3 +534,36 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def validate_user_input(text: str | None, *, max_len: int = 4000) -> str:
+    """Normalize and validate free-text user input from Telegram."""
+    if text is None:
+        raise ValueError("empty_input")
+    cleaned = text.strip()
+    if not cleaned:
+        raise ValueError("empty_input")
+    if len(cleaned) > max_len:
+        raise ValueError("input_too_long")
+    return cleaned
+
+
+def categorize_error(exc: BaseException) -> str:
+    """Map exceptions to stable categories for user-facing messages."""
+    name = type(exc).__name__
+    msg = str(exc).lower()
+    if isinstance(exc, ValueError):
+        if "empty" in msg:
+            return "validation_empty"
+        if "too_long" in msg or "too long" in msg:
+            return "validation_length"
+        return "validation"
+    if isinstance(exc, TimeoutError) or "timeout" in msg:
+        return "timeout"
+    if isinstance(exc, ConnectionError) or "connection" in msg:
+        return "network"
+    if "rate" in msg and "limit" in msg:
+        return "rate_limit"
+    if name in {"HTTPError", "ApiError"}:
+        return "api"
+    return "unknown"
