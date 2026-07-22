@@ -30,7 +30,6 @@ def test_generate_markdown_minimal_args():
 
 def test_generate_markdown_all_sections_populated():
     args = base_args()
-
     args.update(
         {
             "insights": ["Insight one", "Insight two"],
@@ -73,14 +72,18 @@ def test_generate_markdown_all_sections_populated():
 
 
 def test_generate_markdown_empty_optional_fields_have_no_headers():
-    result = generate_markdown(
-        **base_args(),
-        core_ideas=[],
-        why_it_matters=[],
-        open_questions=[],
-        sources=[],
-        report_sections={},
+    args = base_args()
+    args.update(
+        {
+            "core_ideas": [],
+            "why_it_matters": [],
+            "open_questions": [],
+            "sources": [],
+            "report_sections": {},
+        }
     )
+
+    result = generate_markdown(**args)
 
     assert "## Core Ideas" not in result
     assert "## Why This Matters" not in result
@@ -90,12 +93,16 @@ def test_generate_markdown_empty_optional_fields_have_no_headers():
 
 
 def test_generate_markdown_single_items():
-    result = generate_markdown(
-        **base_args(),
-        insights=["Single insight"],
-        themes=["Single theme"],
-        action_items=["Single action"],
+    args = base_args()
+    args.update(
+        {
+            "insights": ["Single insight"],
+            "themes": ["Single theme"],
+            "action_items": ["Single action"],
+        }
     )
+
+    result = generate_markdown(**args)
 
     assert "1. Single insight" in result
     assert "- Single theme" in result
@@ -103,12 +110,16 @@ def test_generate_markdown_single_items():
 
 
 def test_generate_markdown_multiple_items():
-    result = generate_markdown(
-        **base_args(),
-        insights=["First", "Second", "Third"],
-        themes=["Theme A", "Theme B"],
-        quotes=["Quote A", "Quote B"],
+    args = base_args()
+    args.update(
+        {
+            "insights": ["First", "Second", "Third"],
+            "themes": ["Theme A", "Theme B"],
+            "quotes": ["Quote A", "Quote B"],
+        }
     )
+
+    result = generate_markdown(**args)
 
     assert "1. First" in result
     assert "2. Second" in result
@@ -120,15 +131,19 @@ def test_generate_markdown_multiple_items():
 
 
 def test_generate_markdown_opportunity_dictionary_format():
-    result = generate_markdown(
-        **base_args(),
-        opportunities=[
-            {
-                "opportunity": "Expand product",
-                "why": "High customer demand",
-            }
-        ],
+    args = base_args()
+    args.update(
+        {
+            "opportunities": [
+                {
+                    "opportunity": "Expand product",
+                    "why": "High customer demand",
+                }
+            ]
+        }
     )
+
+    result = generate_markdown(**args)
 
     assert "## Opportunities" in result
     assert "- **Expand product**" in result
@@ -138,12 +153,16 @@ def test_generate_markdown_opportunity_dictionary_format():
 def test_generate_markdown_long_strings():
     long_text = "A" * 5000
 
-    result = generate_markdown(
-        **base_args(),
-        executive_summary=long_text,
-        insights=[long_text],
-        quotes=[long_text],
+    args = base_args()
+    args.update(
+        {
+            "executive_summary": long_text,
+            "insights": [long_text],
+            "quotes": [long_text],
+        }
     )
+
+    result = generate_markdown(**args)
 
     assert long_text in result
     assert "## Key Insights" in result
@@ -151,15 +170,19 @@ def test_generate_markdown_long_strings():
 
 
 def test_generate_markdown_report_sections():
-    result = generate_markdown(
-        **base_args(),
-        report_sections={
-            "key_developments": ["New feature released"],
-            "cross_source_connections": ["Common pattern"],
-            "recommended_actions": ["Review data"],
-            "signals_to_monitor": ["Market changes"],
-        },
+    args = base_args()
+    args.update(
+        {
+            "report_sections": {
+                "key_developments": ["New feature released"],
+                "cross_source_connections": ["Common pattern"],
+                "recommended_actions": ["Review data"],
+                "signals_to_monitor": ["Market changes"],
+            }
+        }
     )
+
+    result = generate_markdown(**args)
 
     assert "## Key Developments" in result
     assert "- New feature released" in result
@@ -172,15 +195,19 @@ def test_generate_markdown_report_sections():
 
 
 def test_generate_markdown_source_without_url():
-    result = generate_markdown(
-        **base_args(),
-        sources=[
-            {
-                "title": "Source Title",
-                "source_type": "Report",
-            }
-        ],
+    args = base_args()
+    args.update(
+        {
+            "sources": [
+                {
+                    "title": "Source Title",
+                    "source_type": "Report",
+                }
+            ]
+        }
     )
+
+    result = generate_markdown(**args)
 
     assert "## Sources" in result
     assert "- [Source Title](#) (Report)" in result
