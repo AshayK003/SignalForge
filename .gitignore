@@ -10,3 +10,6 @@ data/
 bot_out.txt
 bot_err.txt
 .pytest_cache/
+
+# Internal audit files (AEOS, engineering memory, bottlenecks, etc.)
+internals/

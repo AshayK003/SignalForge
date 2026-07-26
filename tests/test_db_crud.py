@@ -4,16 +4,16 @@ from app.storage.db import Database
 def test_source_crud_and_tags(db):
     # conftest provides initialized sqlite schema via get_connection path
     d = Database()
-    sid = d.insert_source("web", title="Hello", url="https://ex.test/a")
+    sid = d.insert_source("text", title="Hello", url="https://ex.test/a")
     assert isinstance(sid, int) and sid > 0
 
     row = d.get_source(sid)
     assert row is not None
     assert row["title"] == "Hello"
 
-    d.update_source_status(sid, "done")
+    d.update_source_status(sid, "completed")
     row2 = d.get_source(sid)
-    assert row2["status"] == "done"
+    assert row2["status"] == "completed"
 
     by_url = d.get_source_by_url("https://ex.test/a")
     assert by_url is not None
