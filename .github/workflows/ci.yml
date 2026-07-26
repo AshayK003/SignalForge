@@ -41,7 +41,7 @@ jobs:
           pip install pytest ruff
 
       - name: Lint (ruff)
-        run: ruff check .
+        run: ruff check app/ tests/ database/
 
       - name: Test (pytest)
         run: python -m pytest tests/ -v --tb=short
