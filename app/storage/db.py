@@ -1,16 +1,25 @@
 import json
+import os
 import sqlite3
 import time
 
-from database.schema import get_connection
+from database.schema import get_connection, DB_PATH
 
 _RETRIES = 5
 _RETRY_DELAY = 0.5
 
 
 class Database:
+    _test_db_path = None
+
+    @classmethod
+    def set_test_db_path(cls, path: str):
+        cls._test_db_path = path
+
     @staticmethod
     def _conn():
+        if Database._test_db_path:
+            return get_connection(Database._test_db_path)
         return get_connection()
 
     @staticmethod

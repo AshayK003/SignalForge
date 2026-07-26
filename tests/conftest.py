@@ -3,6 +3,7 @@ import tempfile
 
 import pytest
 
+from app.storage.db import Database
 from app.utils.config import load_config
 from database.schema import init_db
 
@@ -17,7 +18,13 @@ def tmp_db_path():
 
 @pytest.fixture
 def db(tmp_db_path):
-    return init_db(tmp_db_path)
+    # Initialize schema
+    init_db(tmp_db_path)
+    # Tell Database class to use this test DB
+    Database.set_test_db_path(tmp_db_path)
+    yield Database()
+    # Clear test DB path for other tests
+    Database.set_test_db_path("")
 
 
 @pytest.fixture
