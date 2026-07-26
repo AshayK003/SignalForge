@@ -1,9 +1,8 @@
 import json
-import os
 import sqlite3
 import time
 
-from database.schema import get_connection, DB_PATH
+from database.schema import get_connection
 
 _RETRIES = 5
 _RETRY_DELAY = 0.5
