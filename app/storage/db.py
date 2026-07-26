@@ -20,15 +20,21 @@ class Database:
                 return fn()
             except sqlite3.OperationalError as e:
                 if "locked" in str(e) and attempt < _RETRIES - 1:
-                    time.sleep(_RETRY_DELAY * (2 ** attempt))
+                    time.sleep(_RETRY_DELAY * (2**attempt))
                     continue
                 raise
 
     # --- Sources ---
 
-    def insert_source(self, source_type: str, title: str = "", url: str | None = None,
-                      file_path: str | None = None, file_size: int | None = None,
-                      metadata: dict | None = None) -> int:
+    def insert_source(
+        self,
+        source_type: str,
+        title: str = "",
+        url: str | None = None,
+        file_path: str | None = None,
+        file_size: int | None = None,
+        metadata: dict | None = None,
+    ) -> int:
         return self._retry(lambda: self._insert_source(source_type, title, url, file_path, file_size, metadata))
 
     def _insert_source(self, source_type, title, url, file_path, file_size, metadata):
@@ -71,9 +77,7 @@ class Database:
     def _get_source_by_url(self, url):
         c = self._conn()
         try:
-            row = c.execute(
-                "SELECT * FROM sources WHERE url = ? ORDER BY ingested_at DESC LIMIT 1", (url,)
-            ).fetchone()
+            row = c.execute("SELECT * FROM sources WHERE url = ? ORDER BY ingested_at DESC LIMIT 1", (url,)).fetchone()
             return dict(row) if row else None
         finally:
             c.close()
@@ -156,10 +160,18 @@ class Database:
 
     # --- Transcripts ---
 
-    def insert_transcript(self, source_id: int, text: str, language: str = "unknown",
-                          duration_seconds: float | None = None, segments: list | None = None,
-                          model_used: str | None = None) -> int:
-        return self._retry(lambda: self._insert_transcript(source_id, text, language, duration_seconds, segments, model_used))
+    def insert_transcript(
+        self,
+        source_id: int,
+        text: str,
+        language: str = "unknown",
+        duration_seconds: float | None = None,
+        segments: list | None = None,
+        model_used: str | None = None,
+    ) -> int:
+        return self._retry(
+            lambda: self._insert_transcript(source_id, text, language, duration_seconds, segments, model_used)
+        )
 
     def _insert_transcript(self, source_id, text, language, duration_seconds, segments, model_used):
         c = self._conn()
@@ -189,24 +201,65 @@ class Database:
 
     # --- Summaries ---
 
-    def insert_summary(self, source_id: int, level: str, summary_text: str,
-                       core_ideas: list | None = None, insights: list | None = None,
-                       action_items: list | None = None, key_quotes: list | None = None,
-                       themes: list | None = None, technical_concepts: list | None = None,
-                       opportunities: list | None = None, contradictions: list | None = None,
-                       why_it_matters: str = "", open_questions: list | None = None,
-                       model_used: str | None = None, chunk_index: int | None = None,
-                       parent_summary_id: int | None = None) -> int:
-        return self._retry(lambda: self._insert_summary(
-            source_id, level, summary_text, core_ideas, insights, action_items,
-            key_quotes, themes, technical_concepts, opportunities, contradictions,
-            why_it_matters, open_questions, model_used, chunk_index, parent_summary_id))
+    def insert_summary(
+        self,
+        source_id: int,
+        level: str,
+        summary_text: str,
+        core_ideas: list | None = None,
+        insights: list | None = None,
+        action_items: list | None = None,
+        key_quotes: list | None = None,
+        themes: list | None = None,
+        technical_concepts: list | None = None,
+        opportunities: list | None = None,
+        contradictions: list | None = None,
+        why_it_matters: str = "",
+        open_questions: list | None = None,
+        model_used: str | None = None,
+        chunk_index: int | None = None,
+        parent_summary_id: int | None = None,
+    ) -> int:
+        return self._retry(
+            lambda: self._insert_summary(
+                source_id,
+                level,
+                summary_text,
+                core_ideas,
+                insights,
+                action_items,
+                key_quotes,
+                themes,
+                technical_concepts,
+                opportunities,
+                contradictions,
+                why_it_matters,
+                open_questions,
+                model_used,
+                chunk_index,
+                parent_summary_id,
+            )
+        )
 
-    def _insert_summary(self, source_id, level, summary_text, core_ideas,
-                        insights, action_items, key_quotes, themes,
-                        technical_concepts, opportunities, contradictions,
-                        why_it_matters, open_questions, model_used, chunk_index,
-                        parent_summary_id=None):
+    def _insert_summary(
+        self,
+        source_id,
+        level,
+        summary_text,
+        core_ideas,
+        insights,
+        action_items,
+        key_quotes,
+        themes,
+        technical_concepts,
+        opportunities,
+        contradictions,
+        why_it_matters,
+        open_questions,
+        model_used,
+        chunk_index,
+        parent_summary_id=None,
+    ):
         c = self._conn()
         try:
             cur = c.execute(
@@ -215,13 +268,25 @@ class Database:
                     key_quotes, themes, technical_concepts, opportunities, contradictions,
                     why_it_matters, open_questions, model_used, chunk_index)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (source_id, level, parent_summary_id, summary_text,
-             json.dumps(core_ideas or []), json.dumps(insights or []),
-             json.dumps(action_items or []), json.dumps(key_quotes or []),
-             json.dumps(themes or []), json.dumps(technical_concepts or []),
-             json.dumps(opportunities or []), json.dumps(contradictions or []),
-             why_it_matters, json.dumps(open_questions or []), model_used, chunk_index),
-        )
+                (
+                    source_id,
+                    level,
+                    parent_summary_id,
+                    summary_text,
+                    json.dumps(core_ideas or []),
+                    json.dumps(insights or []),
+                    json.dumps(action_items or []),
+                    json.dumps(key_quotes or []),
+                    json.dumps(themes or []),
+                    json.dumps(technical_concepts or []),
+                    json.dumps(opportunities or []),
+                    json.dumps(contradictions or []),
+                    why_it_matters,
+                    json.dumps(open_questions or []),
+                    model_used,
+                    chunk_index,
+                ),
+            )
             c.commit()
             return cur.lastrowid
         finally:
@@ -272,17 +337,47 @@ class Database:
 
     # --- Reports ---
 
-    def insert_report(self, week_start: str, week_end: str, title: str = "",
-                      executive_summary: str | None = None, source_count: int = 0,
-                      local_pdf_path: str | None = None, local_md_path: str | None = None,
-                      cloud_pdf_url: str | None = None, cloud_md_url: str | None = None,
-                      metadata: dict | None = None) -> int:
-        return self._retry(lambda: self._insert_report(
-            week_start, week_end, title, executive_summary, source_count,
-            local_pdf_path, local_md_path, cloud_pdf_url, cloud_md_url, metadata))
+    def insert_report(
+        self,
+        week_start: str,
+        week_end: str,
+        title: str = "",
+        executive_summary: str | None = None,
+        source_count: int = 0,
+        local_pdf_path: str | None = None,
+        local_md_path: str | None = None,
+        cloud_pdf_url: str | None = None,
+        cloud_md_url: str | None = None,
+        metadata: dict | None = None,
+    ) -> int:
+        return self._retry(
+            lambda: self._insert_report(
+                week_start,
+                week_end,
+                title,
+                executive_summary,
+                source_count,
+                local_pdf_path,
+                local_md_path,
+                cloud_pdf_url,
+                cloud_md_url,
+                metadata,
+            )
+        )
 
-    def _insert_report(self, week_start, week_end, title, executive_summary, source_count,
-                       local_pdf_path, local_md_path, cloud_pdf_url, cloud_md_url, metadata):
+    def _insert_report(
+        self,
+        week_start,
+        week_end,
+        title,
+        executive_summary,
+        source_count,
+        local_pdf_path,
+        local_md_path,
+        cloud_pdf_url,
+        cloud_md_url,
+        metadata,
+    ):
         c = self._conn()
         try:
             cur = c.execute(
@@ -290,9 +385,18 @@ class Database:
                    (week_start, week_end, title, executive_summary, source_count,
                     local_pdf_path, local_md_path, cloud_pdf_url, cloud_md_url, metadata)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (week_start, week_end, title, executive_summary, source_count,
-                 local_pdf_path, local_md_path, cloud_pdf_url, cloud_md_url,
-                 json.dumps(metadata or {})),
+                (
+                    week_start,
+                    week_end,
+                    title,
+                    executive_summary,
+                    source_count,
+                    local_pdf_path,
+                    local_md_path,
+                    cloud_pdf_url,
+                    cloud_md_url,
+                    json.dumps(metadata or {}),
+                ),
             )
             c.commit()
             return cur.lastrowid
@@ -332,8 +436,7 @@ class Database:
     def _clear_all_tables(self):
         c = self._conn()
         try:
-            for table in ["report_sources", "source_tags", "tags", "reports",
-                           "summaries", "transcripts", "sources"]:
+            for table in ["report_sources", "source_tags", "tags", "reports", "summaries", "transcripts", "sources"]:
                 c.execute(f"DELETE FROM {table}")
             c.commit()
         finally:
@@ -345,8 +448,9 @@ class Database:
     def _add_report_source(self, report_id, source_id):
         c = self._conn()
         try:
-            c.execute("INSERT OR IGNORE INTO report_sources (report_id, source_id) VALUES (?, ?)",
-                       (report_id, source_id))
+            c.execute(
+                "INSERT OR IGNORE INTO report_sources (report_id, source_id) VALUES (?, ?)", (report_id, source_id)
+            )
             c.commit()
         finally:
             c.close()

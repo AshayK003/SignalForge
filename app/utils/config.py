@@ -1,7 +1,8 @@
 import os
-import yaml
-from pathlib import Path
 from dataclasses import dataclass, field
+from pathlib import Path
+
+import yaml
 from dotenv import load_dotenv
 
 
@@ -101,6 +102,7 @@ def load_config(config_path: str | None = None) -> Config:
     cfg.rclone.path = os.getenv("RCLONE_PATH", cfg.rclone.path)
 
     from app.utils.deps import configure as configure_deps
+
     configure_deps(
         deno_path=cfg.deps.deno_path or None,
         ffmpeg_path=cfg.deps.ffmpeg_path or None,

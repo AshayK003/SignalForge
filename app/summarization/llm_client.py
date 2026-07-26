@@ -90,9 +90,15 @@ class LLMClient:
         if self.log:
             self.log(msg)
 
-    def _attempt_call(self, messages: list[dict], temperature: float,
-                      max_tokens: int, response_format: dict | None,
-                      provider: str, max_retries: int = _MAX_RETRIES) -> str:
+    def _attempt_call(
+        self,
+        messages: list[dict],
+        temperature: float,
+        max_tokens: int,
+        response_format: dict | None,
+        provider: str,
+        max_retries: int = _MAX_RETRIES,
+    ) -> str:
         model = self._provider_model(provider)
         payload = {
             "model": model,
@@ -109,26 +115,25 @@ class LLMClient:
         for attempt in range(max_retries):
             self._limiter.wait()
             if attempt > 0 and self.log:
-                self.log(f"LLM retry {attempt + 1}/{max_retries} "
-                         f"({provider}/{model}): {last_error}")
+                self.log(f"LLM retry {attempt + 1}/{max_retries} ({provider}/{model}): {last_error}")
             try:
                 resp = self._post(provider, payload)
 
                 if resp.status_code == 429:
-                    last_error = f"HTTP 429 (rate limited)"
+                    last_error = "HTTP 429 (rate limited)"
                     if attempt < max_retries - 1:
                         self._wait_for_rate_limit(resp.headers)
                         continue
-                    raise RuntimeError(
-                        f"Rate limited after {max_retries} retries ({provider}/{model}): {resp.text}")
+                    raise RuntimeError(f"Rate limited after {max_retries} retries ({provider}/{model}): {resp.text}")
 
                 if resp.status_code >= 500:
                     last_error = f"HTTP {resp.status_code}"
                     if attempt < max_retries - 1:
-                        time.sleep(2 ** attempt)
+                        time.sleep(2**attempt)
                         continue
                     raise RuntimeError(
-                        f"Server error after {max_retries} retries ({provider}/{model}): {resp.status_code}: {resp.text}")
+                        f"Server error after {max_retries} retries ({provider}/{model}): {resp.status_code}: {resp.text}"
+                    )
 
                 if resp.status_code != 200:
                     raise RuntimeError(f"API error ({provider}/{model}): {resp.status_code}: {resp.text}")
@@ -136,16 +141,15 @@ class LLMClient:
                 result = resp.json()
                 content = result["choices"][0]["message"]["content"]
                 usage = result.get("usage", {})
-                self._log(f"LLM response: {usage.get('total_tokens', '?')} tokens "
-                          f"({provider}/{model})")
+                self._log(f"LLM response: {usage.get('total_tokens', '?')} tokens ({provider}/{model})")
                 return content
 
             except httpx.TimeoutException as e:
                 last_error = f"timeout ({e})"
                 if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                     continue
-                raise RuntimeError(f"Timeout after {max_retries} retries ({provider}/{model}): {e}")
+                raise RuntimeError(f"Timeout after {max_retries} retries ({provider}/{model}): {e}") from e
 
         raise RuntimeError(f"Failed after {max_retries} retries ({provider}/{model}): {last_error}")
 
@@ -157,8 +161,13 @@ class LLMClient:
         except Exception:
             return False
 
-    def chat(self, messages: list[dict], temperature: float = 0.3,
-             max_tokens: int = 4096, response_format: dict | None = None) -> str:
+    def chat(
+        self,
+        messages: list[dict],
+        temperature: float = 0.3,
+        max_tokens: int = 4096,
+        response_format: dict | None = None,
+    ) -> str:
         # Try providers in order: configured primary → fallbacks
         providers = [self.config.llm.provider]
         if self.config.llm.provider == "deepseek":
@@ -176,11 +185,12 @@ class LLMClient:
             is_remote = provider in ("openrouter", "deepseek")
             max_retry = 1 if is_remote else _MAX_RETRIES
             if provider == "ollama" and not self._ollama_alive():
-                self._log(f"Ollama not reachable — skipping")
+                self._log("Ollama not reachable — skipping")
                 continue
             try:
-                return self._attempt_call(messages, temperature, max_tokens, response_format,
-                                          provider, max_retries=max_retry)
+                return self._attempt_call(
+                    messages, temperature, max_tokens, response_format, provider, max_retries=max_retry
+                )
             except RuntimeError as e:
                 last_error = e
                 self._log(f"{provider} failed — trying next: {e}")

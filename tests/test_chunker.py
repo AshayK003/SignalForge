@@ -1,4 +1,3 @@
-import pytest
 from app.summarization.chunker import chunk_text
 
 

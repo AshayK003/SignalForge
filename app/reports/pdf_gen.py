@@ -2,22 +2,24 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
+
 from fpdf import FPDF
 
 
 def strip_markdown(text: str) -> str:
-    text = re.sub(r'!\[([^\]]*)\]\([^)]+\)', r'\1', text)
-    text = re.sub(r'\[([^\]]*)\]\([^)]+\)', r'\1', text)
-    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
-    text = re.sub(r'[*_]{2}([^*_]+)[*_]{2}', r'\1', text)
-    text = re.sub(r'[*_]([^*_]+)[*_](?!\*)', r'\1', text)
-    text = re.sub(r'`{1,3}([^`]+)`{1,3}', r'\1', text)
-    text = re.sub(r'^>\s?', '', text, flags=re.MULTILINE)
-    text = re.sub(r'^[\s]*[-*+]\s+', '', text, flags=re.MULTILINE)
-    text = re.sub(r'^\s*\d+[.)]\s+', '', text, flags=re.MULTILINE)
-    text = re.sub(r'^-{3,}\s*$', '', text, flags=re.MULTILINE)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"\[([^\]]*)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"[*_]{2}([^*_]+)[*_]{2}", r"\1", text)
+    text = re.sub(r"[*_]([^*_]+)[*_](?!\*)", r"\1", text)
+    text = re.sub(r"`{1,3}([^`]+)`{1,3}", r"\1", text)
+    text = re.sub(r"^>\s?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^[\s]*[-*+]\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*\d+[.)]\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^-{3,}\s*$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
 
 FONT_DIR = Path(os.environ.get("WINDIR", "C:\\Windows")) / "Fonts"
 
@@ -176,7 +178,7 @@ class ReportPDF(FPDF):
         x_start = LMARGIN + INDENT
         self.set_x(x_start)
         self.set_font("Uni", "B", 10)
-        for i, t in enumerate(themes):
+        for _i, t in enumerate(themes):
             label = f"  {t}  "
             tw = self.get_string_width(label) + 2
             if self.get_x() + tw > 210 - RMARGIN:
@@ -196,8 +198,7 @@ class ReportPDF(FPDF):
         self.multi_cell(0, self.LH, text, fill=True)
         self.ln(2)
 
-    def cover_page(self, title: str, week_start: str, week_end: str,
-                   source_count: int):
+    def cover_page(self, title: str, week_start: str, week_end: str, source_count: int):
         self.add_page()
         self.ln(30)
         self.set_font("Uni", "B", 24)
@@ -216,20 +217,33 @@ class ReportPDF(FPDF):
         self.ln(4)
         self.set_font("Uni", "B", 14)
         self.set_text_color(37, 99, 235)
-        self.cell(0, 8, f"{source_count} source{'s' if source_count != 1 else ''}", align="C", new_x="LMARGIN", new_y="NEXT")
+        self.cell(
+            0, 8, f"{source_count} source{'s' if source_count != 1 else ''}", align="C", new_x="LMARGIN", new_y="NEXT"
+        )
         self.ln(8)
         self.set_font("Uni", "", 10.5)
         self.set_text_color(156, 163, 175)
-        self.cell(0, 6, f"Generated {datetime.now().strftime('%B %d, %Y at %H:%M')}", align="C", new_x="LMARGIN", new_y="NEXT")
+        self.cell(
+            0, 6, f"Generated {datetime.now().strftime('%B %d, %Y at %H:%M')}", align="C", new_x="LMARGIN", new_y="NEXT"
+        )
         self.set_font("Uni", "I", 9)
         self.cell(0, 6, "SignalForge — Local-first AI Knowledge Digest", align="C", new_x="LMARGIN", new_y="NEXT")
 
 
-def generate_pdf(title: str, week_start: str, week_end: str,
-                 executive_summary: str, source_count: int,
-                 insights: list, action_items: list, quotes: list,
-                 themes: list, opportunities: list, contradictions: list,
-                 report_sections: dict | None = None) -> bytes:
+def generate_pdf(
+    title: str,
+    week_start: str,
+    week_end: str,
+    executive_summary: str,
+    source_count: int,
+    insights: list,
+    action_items: list,
+    quotes: list,
+    themes: list,
+    opportunities: list,
+    contradictions: list,
+    report_sections: dict | None = None,
+) -> bytes:
     pdf = ReportPDF()
     pdf.alias_nb_pages()
 

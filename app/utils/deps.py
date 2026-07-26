@@ -43,6 +43,7 @@ def ensure_local_paths():
         os.environ["PATH"] = POPPLER_BIN + os.pathsep + os.environ.get("PATH", "")
     if TESSERACT_CMD:
         import pytesseract
+
         pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
         if not os.path.exists(TESSERACT_CMD):
             raise RuntimeError(

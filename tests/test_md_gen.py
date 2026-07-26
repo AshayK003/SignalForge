@@ -212,6 +212,7 @@ def test_generate_markdown_source_without_url():
     assert "## Sources" in result
     assert "- [Source Title](#) (Report)" in result
 
+
 def test_generate_markdown_core_sections():
     args = base_args()
     args.update(

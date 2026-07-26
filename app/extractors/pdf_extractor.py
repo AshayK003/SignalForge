@@ -1,14 +1,13 @@
 from pathlib import Path
 from typing import Any
 
-from pypdf import PdfReader
 from PIL import Image
+from pypdf import PdfReader
 
 from app.utils.deps import ensure_local_paths
 
 
-def extract_text(pdf_path: str | Path, use_ocr_fallback: bool = True,
-                 logger: Any = None) -> dict:
+def extract_text(pdf_path: str | Path, use_ocr_fallback: bool = True, logger: Any = None) -> dict:
     pdf_path = Path(pdf_path)
     pages = []
     full_text_parts = []
@@ -62,16 +61,13 @@ def _pdf_to_images(pdf_path: Path) -> list[Image.Image]:
     try:
         from pdf2image import convert_from_path
     except ImportError:
-        raise RuntimeError(
-            "OCR requires 'pdf2image'. Install with: pip install pdf2image"
-        )
+        raise RuntimeError("OCR requires 'pdf2image'. Install with: pip install pdf2image") from None
     try:
         return convert_from_path(str(pdf_path), dpi=300)
     except Exception as e:
         msg = str(e).lower()
         if "pdftoppm" in msg or "poppler" in msg or "not found" in msg:
             raise RuntimeError(
-                "Poppler is not on your PATH. "
-                "Install it with: winget install oschwartz10612.Poppler"
+                "Poppler is not on your PATH. Install it with: winget install oschwartz10612.Poppler"
             ) from e
         raise RuntimeError(f"PDF to image conversion failed: {e}") from e

@@ -1,12 +1,13 @@
 import pytest
-from database.schema import init_db, get_connection
+
+from database.schema import init_db
 
 
 def test_all_tables_created(tmp_db_path):
     conn = init_db(tmp_db_path)
-    tables = [row[0] for row in conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-    ).fetchall()]
+    tables = [
+        row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
+    ]
     assert "sources" in tables
     assert "transcripts" in tables
     assert "summaries" in tables
@@ -32,8 +33,9 @@ def test_source_insert_and_retrieve(tmp_db_path):
 
 
 def test_source_status_constraint(tmp_db_path):
+    import sqlite3
     conn = init_db(tmp_db_path)
-    with pytest.raises(Exception):
+    with pytest.raises(sqlite3.IntegrityError):
         conn.execute(
             "INSERT INTO sources (source_type, title, status) VALUES (?, ?, ?)",
             ("pdf", "Bad Status", "invalid_status"),

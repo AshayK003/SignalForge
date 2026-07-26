@@ -1,5 +1,3 @@
-import os
-import pytest
 from app.utils.config import Config, load_config
 
 

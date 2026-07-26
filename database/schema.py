@@ -1,5 +1,5 @@
-import sqlite3
 import os
+import sqlite3
 from pathlib import Path
 
 DB_PATH = os.getenv("SIGNALFORGE_DB", str(Path(__file__).parent / "signalforge.db"))
@@ -142,6 +142,7 @@ def _migrate_source_type_constraint(conn: sqlite3.Connection):
         PRAGMA foreign_keys=ON;
     """)
     conn.commit()
+
 
 SCHEMA_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_sources_status ON sources(status);",

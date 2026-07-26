@@ -1,5 +1,4 @@
-import pytest
-from app.summarization.llm_client import LLMClient, _MAX_RETRIES
+from app.summarization.llm_client import LLMClient
 from app.utils.config import Config
 
 

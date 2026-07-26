@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Any
 
-
 PROMPT_DIR = Path(__file__).parent.parent.parent / "prompts"
 
 

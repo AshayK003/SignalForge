@@ -1,4 +1,5 @@
 import pytest
+
 from bot import categorize_error, validate_user_input
 
 

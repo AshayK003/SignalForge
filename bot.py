@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import os
@@ -24,7 +23,7 @@ from app.storage.files import FileManager
 from app.summarization.chunker import chunk_text
 from app.summarization.prompts import PromptLibrary
 from app.utils.config import load_config
-from app.utils.helpers import week_boundary, parse_json_field
+from app.utils.helpers import parse_json_field, week_boundary
 
 cfg = load_config()
 db = Database()
@@ -37,15 +36,19 @@ DATA_DIR = Path(cfg.app.data_dir)
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 
-def gemini_chat(messages: list[dict], system_prompt: str = "",
-                temperature: float = 0.3, max_tokens: int = 4096,
-                json_mode: bool = False) -> str:
+def gemini_chat(
+    messages: list[dict],
+    system_prompt: str = "",
+    temperature: float = 0.3,
+    max_tokens: int = 4096,
+    json_mode: bool = False,
+) -> str:
     payload = {
         "contents": [{"role": m["role"], "parts": [{"text": m["content"]}]} for m in messages],
         "generationConfig": {
             "temperature": temperature,
             "maxOutputTokens": max_tokens,
-        }
+        },
     }
     if system_prompt:
         payload["system_instruction"] = {"parts": [{"text": system_prompt}]}
@@ -56,7 +59,7 @@ def gemini_chat(messages: list[dict], system_prompt: str = "",
         try:
             r = httpx.post(GEMINI_URL, headers={"x-goog-api-key": GEMINI_API_KEY}, json=payload, timeout=120)
             if r.status_code == 429:
-                wait = 5 * (2 ** attempt)
+                wait = 5 * (2**attempt)
                 print(f"Gemini rate limited — waiting {wait}s")
                 time.sleep(wait)
                 continue
@@ -65,10 +68,10 @@ def gemini_chat(messages: list[dict], system_prompt: str = "",
             text = data["candidates"][0]["content"]["parts"][0]["text"]
             return text
         except Exception as e:
-            if attempt < 2:
-                time.sleep(2 ** attempt)
-                continue
-            raise RuntimeError(f"Gemini API error: {e}")
+                    if attempt < 2:
+                        time.sleep(2**attempt)
+                        continue
+                    raise RuntimeError(f"Gemini API error: {e}") from e
 
     raise RuntimeError("Gemini API failed after retries")
 
@@ -87,10 +90,12 @@ def pacex_summarize(text: str, title: str = "") -> dict:
     system = prompts.load("pace_x_system")
     chunks = chunk_text(text, cfg.chunking.max_chunk_size, cfg.chunking.overlap)
     chunk_summaries = []
-    for i, chunk in enumerate(chunks):
+    for _i, chunk in enumerate(chunks):
         chunk_text_content = chunk["text"]
         if chunk.get("overlap_prefix"):
-            chunk_text_content = f"[Previous chunk context]\n{chunk['overlap_prefix']}\n\n[Current chunk]\n{chunk_text_content}"
+            chunk_text_content = (
+                f"[Previous chunk context]\n{chunk['overlap_prefix']}\n\n[Current chunk]\n{chunk_text_content}"
+            )
         prompt = prompts.render("summarize_chunk", text=chunk_text_content, title=title)
         response = gemini_chat(
             [{"role": "user", "content": prompt}],
@@ -102,9 +107,7 @@ def pacex_summarize(text: str, title: str = "") -> dict:
     if len(chunk_summaries) == 1:
         return chunk_summaries[0]
 
-    summaries_text = "\n\n---\n\n".join(
-        _format_chunk(i, s) for i, s in enumerate(chunk_summaries)
-    )
+    summaries_text = "\n\n---\n\n".join(_format_chunk(i, s) for i, s in enumerate(chunk_summaries))
     prompt = prompts.render("synthesize", summaries=summaries_text, title=title)
     response = gemini_chat(
         [{"role": "user", "content": prompt}],
@@ -113,9 +116,16 @@ def pacex_summarize(text: str, title: str = "") -> dict:
     )
     result = parse_llm_json(response)
     defaults = {
-        "summary": "", "core_ideas": [], "insights": [], "action_items": [],
-        "key_quotes": [], "themes": [], "technical_concepts": [],
-        "opportunities": [], "contradictions": [], "why_it_matters": "",
+        "summary": "",
+        "core_ideas": [],
+        "insights": [],
+        "action_items": [],
+        "key_quotes": [],
+        "themes": [],
+        "technical_concepts": [],
+        "opportunities": [],
+        "contradictions": [],
+        "why_it_matters": "",
         "open_questions": [],
     }
     return {**defaults, **result}
@@ -135,7 +145,7 @@ def _format_chunk(i: int, s: dict) -> str:
 # ── Telegram Bot ────────────────────────────────────────────────────────
 
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 
 def _is_authorized(update: Update) -> bool:
@@ -174,16 +184,18 @@ async def ingest_youtube(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     msg = await update.message.reply_text("📥 Processing YouTube video...")
     try:
-        from app.ingestion.youtube import get_captions, download_audio, extract_metadata
+        from app.ingestion.youtube import download_audio, extract_metadata, get_captions
         from app.transcription.transcriber import Transcriber
 
         caption_result = get_captions(url, str(DATA_DIR / "temp"))
         if caption_result:
             text = caption_result["text"]
             transcript_data = {
-                "text": text, "language": "en",
+                "text": text,
+                "language": "en",
                 "duration_seconds": caption_result.get("duration_seconds"),
-                "segments": [], "model_used": "youtube-captions",
+                "segments": [],
+                "model_used": "youtube-captions",
             }
             meta = extract_metadata(url)
             title = meta.get("title", url)
@@ -194,8 +206,7 @@ async def ingest_youtube(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             audio_path = result.get("audio_path", "")
             if not audio_path or not Path(audio_path).exists():
                 raise RuntimeError("Audio download failed")
-            t = Transcriber(cfg.transcription.model, cfg.transcription.device,
-                            cfg.transcription.compute_type)
+            t = Transcriber(cfg.transcription.model, cfg.transcription.device, cfg.transcription.compute_type)
             transcript_data = t.transcribe(audio_path)
             text = transcript_data["text"]
             title = result.get("title", url)
@@ -203,26 +214,41 @@ async def ingest_youtube(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
         summary = pacex_summarize(text, title)
 
-        source_id = db.insert_source("youtube", title=title, url=url, metadata={"method": transcript_data.get("model_used", "unknown")})
+        source_id = db.insert_source(
+            "youtube", title=title, url=url, metadata={"method": transcript_data.get("model_used", "unknown")}
+        )
         files.save_transcript(source_id, text, "txt")
-        db.insert_transcript(source_id, text=text, language=transcript_data.get("language", "en"),
-                             duration_seconds=transcript_data.get("duration_seconds"),
-                             segments=transcript_data.get("segments", []),
-                             model_used=transcript_data.get("model_used", "youtube-captions"))
-        db.insert_summary(source_id, level="source", summary_text=summary.get("summary", ""),
-                          core_ideas=summary.get("core_ideas"), insights=summary.get("insights"),
-                          action_items=summary.get("action_items"), key_quotes=summary.get("key_quotes"),
-                          themes=summary.get("themes"), technical_concepts=summary.get("technical_concepts"),
-                          opportunities=summary.get("opportunities"), contradictions=summary.get("contradictions"),
-                          why_it_matters=summary.get("why_it_matters"), open_questions=summary.get("open_questions"),
-                          model_used=f"gemini/{GEMINI_MODEL}")
+        db.insert_transcript(
+            source_id,
+            text=text,
+            language=transcript_data.get("language", "en"),
+            duration_seconds=transcript_data.get("duration_seconds"),
+            segments=transcript_data.get("segments", []),
+            model_used=transcript_data.get("model_used", "youtube-captions"),
+        )
+        db.insert_summary(
+            source_id,
+            level="source",
+            summary_text=summary.get("summary", ""),
+            core_ideas=summary.get("core_ideas"),
+            insights=summary.get("insights"),
+            action_items=summary.get("action_items"),
+            key_quotes=summary.get("key_quotes"),
+            themes=summary.get("themes"),
+            technical_concepts=summary.get("technical_concepts"),
+            opportunities=summary.get("opportunities"),
+            contradictions=summary.get("contradictions"),
+            why_it_matters=summary.get("why_it_matters"),
+            open_questions=summary.get("open_questions"),
+            model_used=f"gemini/{GEMINI_MODEL}",
+        )
         files.save_summary(source_id, json.dumps(summary, indent=2))
         db.update_source_status(source_id, "completed")
 
         reply = f"✅ *{title[:80]}*\n\n📝 *Summary:*\n{summary.get('summary', '(empty)')[:1000]}"
         await msg.edit_text(reply, parse_mode="Markdown")
 
-    except Exception as e:
+    except Exception:
         logger.exception("ingest_youtube error")
         await msg.edit_text("❌ Something went wrong. Check logs for details.")
 
@@ -245,20 +271,29 @@ async def ingest_text_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         db.update_source_status(source_id, "processing")
         files.save_transcript(source_id, text, "txt")
         db.insert_transcript(source_id, text=text, language="en", segments=[], model_used="manual")
-        db.insert_summary(source_id, level="source", summary_text=summary.get("summary", ""),
-                          core_ideas=summary.get("core_ideas"), insights=summary.get("insights"),
-                          action_items=summary.get("action_items"), key_quotes=summary.get("key_quotes"),
-                          themes=summary.get("themes"), technical_concepts=summary.get("technical_concepts"),
-                          opportunities=summary.get("opportunities"), contradictions=summary.get("contradictions"),
-                          why_it_matters=summary.get("why_it_matters"), open_questions=summary.get("open_questions"),
-                          model_used=f"gemini/{GEMINI_MODEL}")
+        db.insert_summary(
+            source_id,
+            level="source",
+            summary_text=summary.get("summary", ""),
+            core_ideas=summary.get("core_ideas"),
+            insights=summary.get("insights"),
+            action_items=summary.get("action_items"),
+            key_quotes=summary.get("key_quotes"),
+            themes=summary.get("themes"),
+            technical_concepts=summary.get("technical_concepts"),
+            opportunities=summary.get("opportunities"),
+            contradictions=summary.get("contradictions"),
+            why_it_matters=summary.get("why_it_matters"),
+            open_questions=summary.get("open_questions"),
+            model_used=f"gemini/{GEMINI_MODEL}",
+        )
         files.save_summary(source_id, json.dumps(summary, indent=2))
         db.update_source_status(source_id, "completed")
 
         reply = f"✅ *Analyzed!* (ID: `{source_id}`)\n\n📝 *Summary:*\n{summary.get('summary', '(empty)')[:1000]}"
         await msg.edit_text(reply, parse_mode="Markdown")
 
-    except Exception as e:
+    except Exception:
         logger.exception("ingest_text error")
         await msg.edit_text("❌ Something went wrong. Check logs for details.")
 
@@ -284,21 +319,28 @@ async def handle_file(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         text = ""
         if file_type == "pdf":
             from app.extractors.pdf_extractor import extract_text
+
             extracted = extract_text(str(dest))
             text = extracted["text"]
             await msg.edit_text(f"📄 Extracted {len(text):,} chars\n🧠 Summarizing...")
         elif file_type == "audio":
             from app.transcription.transcriber import Transcriber
+
             t = Transcriber(cfg.transcription.model, cfg.transcription.device, cfg.transcription.compute_type)
             transcript = t.transcribe(str(dest))
             text = transcript["text"]
-            db.insert_transcript(source_id, text=text, language=transcript["language"],
-                                 duration_seconds=transcript.get("duration_seconds"),
-                                 segments=transcript.get("segments", []),
-                                 model_used=transcript.get("model_used", ""))
+            db.insert_transcript(
+                source_id,
+                text=text,
+                language=transcript["language"],
+                duration_seconds=transcript.get("duration_seconds"),
+                segments=transcript.get("segments", []),
+                model_used=transcript.get("model_used", ""),
+            )
             await msg.edit_text(f"🎤 Transcribed {len(text):,} chars\n🧠 Summarizing...")
         else:
             from app.extractors.text_extractor import extract_text as extract_txt
+
             extracted = extract_txt(str(dest))
             text = extracted["text"]
             await msg.edit_text(f"📝 Read {len(text):,} chars\n🧠 Summarizing...")
@@ -307,20 +349,29 @@ async def handle_file(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             raise RuntimeError("No text extracted from file")
 
         summary = pacex_summarize(text, title)
-        db.insert_summary(source_id, level="source", summary_text=summary.get("summary", ""),
-                          core_ideas=summary.get("core_ideas"), insights=summary.get("insights"),
-                          action_items=summary.get("action_items"), key_quotes=summary.get("key_quotes"),
-                          themes=summary.get("themes"), technical_concepts=summary.get("technical_concepts"),
-                          opportunities=summary.get("opportunities"), contradictions=summary.get("contradictions"),
-                          why_it_matters=summary.get("why_it_matters"), open_questions=summary.get("open_questions"),
-                          model_used=f"gemini/{GEMINI_MODEL}")
+        db.insert_summary(
+            source_id,
+            level="source",
+            summary_text=summary.get("summary", ""),
+            core_ideas=summary.get("core_ideas"),
+            insights=summary.get("insights"),
+            action_items=summary.get("action_items"),
+            key_quotes=summary.get("key_quotes"),
+            themes=summary.get("themes"),
+            technical_concepts=summary.get("technical_concepts"),
+            opportunities=summary.get("opportunities"),
+            contradictions=summary.get("contradictions"),
+            why_it_matters=summary.get("why_it_matters"),
+            open_questions=summary.get("open_questions"),
+            model_used=f"gemini/{GEMINI_MODEL}",
+        )
         files.save_summary(source_id, json.dumps(summary, indent=2))
         db.update_source_status(source_id, "completed")
 
         reply = f"✅ *{title[:60]}* (ID: `{source_id}`)\n\n📝 {summary.get('summary', '')[:1000]}"
         await msg.edit_text(reply, parse_mode="Markdown")
 
-    except Exception as e:
+    except Exception:
         logger.exception("handle_file error")
         await msg.edit_text("❌ Something went wrong. Check logs for details.")
 
@@ -353,7 +404,7 @@ async def summary_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"📊 *{src['title'][:80]}*",
         f"Type: `{src['source_type']}` | ID: `{source_id}`",
         "",
-        f"📝 *Summary*",
+        "📝 *Summary*",
         s.get("summary_text", "")[:1500],
     ]
     ideas = parse_json_field(s.get("core_ideas", "[]"))
@@ -396,14 +447,12 @@ async def report(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     msg = await update.message.reply_text("📊 Generating weekly report...")
     try:
+        import app.summarization.llm_client as llm_mod
         from app.reports.generator import ReportGenerator
         from app.summarization.llm_client import LLMClient
 
-        import app.summarization.llm_client as llm_mod
         original_chat = llm_mod.LLMClient.chat
-        llm_mod.LLMClient.chat = lambda self, messages, **kw: gemini_chat(
-            messages, system_prompt="", **kw
-        )
+        llm_mod.LLMClient.chat = lambda self, messages, **kw: gemini_chat(messages, system_prompt="", **kw)
 
         try:
             llm = LLMClient(cfg)
@@ -431,7 +480,7 @@ async def report(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         else:
             await msg.edit_text("Report generated but no data found.")
 
-    except Exception as e:
+    except Exception:
         logger.exception("report error")
         await msg.edit_text("❌ Something went wrong. Check logs for details.")
 
@@ -451,7 +500,7 @@ async def search(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"No sources matching `{query}`", parse_mode="Markdown")
         return
 
-    lines = [f"📋 *Results for \"{query}\":*\n"]
+    lines = [f'📋 *Results for "{query}":*\n']
     for s in results[:10]:
         lines.append(f"`{s['id']}` — {s.get('title', 'Untitled')[:60]} ({s['source_type']})")
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
@@ -502,7 +551,8 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 "Respond concisely with strong structure. Identify yourself as Hermes "
                 "when asked who you are."
             ),
-            temperature=0.5, max_tokens=500,
+            temperature=0.5,
+            max_tokens=500,
         )
         await update.message.reply_text(response)
 

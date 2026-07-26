@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from app.extractors.text_extractor import extract_text
@@ -45,4 +43,3 @@ def test_extract_binary_file_raises(tmp_path):
 
     with pytest.raises(UnicodeDecodeError):
         extract_text(file)
-

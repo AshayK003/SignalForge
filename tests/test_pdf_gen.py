@@ -10,10 +10,7 @@ def test_strip_headers():
 
 
 def test_strip_links():
-    assert (
-        strip_markdown("[OpenAI](https://openai.com)")
-        == "OpenAI"
-    )
+    assert strip_markdown("[OpenAI](https://openai.com)") == "OpenAI"
 
 
 def test_strip_inline_code():
@@ -62,4 +59,3 @@ def test_strip_multiple_markdown():
     assert "**" not in result
     assert "[" not in result
     assert "](" not in result
-

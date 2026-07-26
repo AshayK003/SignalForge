@@ -1,5 +1,5 @@
 import re
-from typing import Generator
+from collections.abc import Generator
 
 
 def chunk_text(text: str | None, max_chunk_size: int = 3000, overlap: int = 300) -> list[dict]:
@@ -25,7 +25,7 @@ def chunk_text(text: str | None, max_chunk_size: int = 3000, overlap: int = 300)
 
             if para_len > max_chunk_size:
                 start_idx = len(chunks)
-                for i, sub_chunk in enumerate(_split_large_paragraph(para, max_chunk_size, overlap, start_idx)):
+                for _i, sub_chunk in enumerate(_split_large_paragraph(para, max_chunk_size, overlap, start_idx)):
                     chunks.append(sub_chunk)
                 current = []
                 current_len = 0
@@ -59,7 +59,6 @@ def _split_paragraphs(text: str) -> list[str]:
 
 def _split_large_paragraph(text: str, max_size: int, overlap: int, start_index: int = 0) -> Generator[dict, None, None]:
     sentences = re.split(r"(?<=[.!?])\s+", text)
-    chunks = []
     current = []
     current_len = 0
     idx = 0
@@ -72,7 +71,12 @@ def _split_large_paragraph(text: str, max_size: int, overlap: int, start_index: 
         else:
             if current:
                 chunk_text = " ".join(current)
-                yield {"index": start_index + idx, "text": chunk_text, "overlap_prefix": "", "char_count": len(chunk_text)}
+                yield {
+                    "index": start_index + idx,
+                    "text": chunk_text,
+                    "overlap_prefix": "",
+                    "char_count": len(chunk_text),
+                }
                 idx += 1
             current = [sent]
             current_len = sent_len

@@ -61,8 +61,7 @@ def test_extract_scanned_pdf_uses_ocr(mock_reader, mock_ocr):
 
 @patch("app.extractors.pdf_extractor.PdfReader")
 def test_corrupted_pdf_raises(mock_reader):
-    mock_reader.side_effect = Exception("Corrupted PDF")
+    mock_reader.side_effect = RuntimeError("Corrupted PDF")
 
-    with pytest.raises(Exception):
+    with pytest.raises(RuntimeError):
         extract_text("broken.pdf")
-

@@ -1,8 +1,8 @@
 import io
-
-import pytest
 from io import BytesIO
 from pathlib import Path
+
+import pytest
 
 from app.storage.files import FileManager
 
@@ -138,6 +138,8 @@ def test_clean_temp_keeps_directories(file_manager):
 
     assert nested_dir.exists()
     assert temp_file.exists()
+
+
 def test_file_manager_dirs(tmp_path: Path):
     fm = FileManager(str(tmp_path / "data"))
     assert fm.raw.is_dir()

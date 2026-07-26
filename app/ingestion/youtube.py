@@ -1,19 +1,20 @@
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
 from typing import Any
 
-import os
-
-from app.utils.deps import DENO_PATH, FFMPEG_PATH, extended_env
+from app.utils.deps import FFMPEG_PATH, extended_env
 
 _COOKIES_FILE = Path(os.getenv("SIGNALFORGE_DATA_DIR", "./data")) / "cookies.txt"
 
 _YTDLP_BASE = [
     "yt-dlp",
-    "--remote-components", "ejs:github",
-    "--extractor-args", "youtube:skip=web_safari",
+    "--remote-components",
+    "ejs:github",
+    "--extractor-args",
+    "youtube:skip=web_safari",
 ]
 
 
@@ -24,8 +25,7 @@ def _build_cmd(*args: str) -> list[str]:
     return cmd
 
 
-def download_audio(url: str, output_dir: str | Path, logger: Any = None,
-                   ffmpeg_path: str | None = None) -> dict:
+def download_audio(url: str, output_dir: str | Path, logger: Any = None, ffmpeg_path: str | None = None) -> dict:
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -41,10 +41,15 @@ def download_audio(url: str, output_dir: str | Path, logger: Any = None,
     output_template = str(output_dir / "%(id)s.%(ext)s")
 
     cmd = _build_cmd(
-        "-x", "--audio-format", "mp3",
-        "--audio-quality", "0",
-        "-o", output_template,
-        "--ffmpeg-location", ffmpeg_path or FFMPEG_PATH,
+        "-x",
+        "--audio-format",
+        "mp3",
+        "--audio-quality",
+        "0",
+        "-o",
+        output_template,
+        "--ffmpeg-location",
+        ffmpeg_path or FFMPEG_PATH,
         url,
     )
 
@@ -89,10 +94,8 @@ def extract_metadata(url: str) -> dict:
     return json.loads(result.stdout)
 
 
-def get_captions(url: str, output_dir: str | Path | None = None,
-                 logger: Any = None) -> dict | None:
+def get_captions(url: str, output_dir: str | Path | None = None, logger: Any = None) -> dict | None:
     from youtube_transcript_api import YouTubeTranscriptApi
-    from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
 
     log = logger.debug if logger else print
 

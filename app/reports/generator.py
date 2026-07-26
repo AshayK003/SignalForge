@@ -12,8 +12,7 @@ from app.utils.helpers import parse_json_field, week_boundary
 
 
 class ReportGenerator:
-    def __init__(self, db: Database, files: FileManager, llm: LLMClient,
-                 prompts: PromptLibrary, logger: Any = None):
+    def __init__(self, db: Database, files: FileManager, llm: LLMClient, prompts: PromptLibrary, logger: Any = None):
         self.db = db
         self.files = files
         self.llm = llm
@@ -43,8 +42,7 @@ class ReportGenerator:
                 "signals_to_monitor": [],
             }
 
-    def generate_weekly(self, week_start: str | None = None,
-                        week_end: str | None = None) -> dict:
+    def generate_weekly(self, week_start: str | None = None, week_end: str | None = None) -> dict:
         if not week_start or not week_end:
             week_start, week_end = week_boundary()
 
@@ -75,7 +73,7 @@ class ReportGenerator:
             all_insights.extend(parse_json_field(s.get("insights", "[]")) or [])
             all_action_items.extend(parse_json_field(s.get("action_items", "[]")) or [])
             all_quotes.extend(parse_json_field(s.get("key_quotes", "[]")) or [])
-            for t in (parse_json_field(s.get("themes", "[]")) or []):
+            for t in parse_json_field(s.get("themes", "[]")) or []:
                 all_themes.add(t)
             all_opportunities.extend(parse_json_field(s.get("opportunities", "[]")) or [])
             all_contradictions.extend(parse_json_field(s.get("contradictions", "[]")) or [])
@@ -95,10 +93,15 @@ class ReportGenerator:
             source_count=len(source_ids),
         )
 
-        raw_response = self.llm.chat([
-            {"role": "system", "content": "You are an executive intelligence analyst. Write a comprehensive weekly report."},
-            {"role": "user", "content": report_prompt},
-        ])
+        raw_response = self.llm.chat(
+            [
+                {
+                    "role": "system",
+                    "content": "You are an executive intelligence analyst. Write a comprehensive weekly report.",
+                },
+                {"role": "user", "content": report_prompt},
+            ]
+        )
 
         parsed = self._parse_report_response(raw_response)
         executive_summary = parsed["executive_summary"]
@@ -130,9 +133,7 @@ class ReportGenerator:
             report_sections=report_sections,
         )
 
-        md_path = self.files.save_report(
-            f"report_{week_start}_{week_end}", content, "md"
-        )
+        md_path = self.files.save_report(f"report_{week_start}_{week_end}", content, "md")
 
         pdf_data = generate_pdf(
             title=week_title,
@@ -149,9 +150,7 @@ class ReportGenerator:
             report_sections=report_sections,
         )
 
-        pdf_path = self.files.save_report(
-            f"report_{week_start}_{week_end}", pdf_data, "pdf"
-        )
+        pdf_path = self.files.save_report(f"report_{week_start}_{week_end}", pdf_data, "pdf")
 
         report_id = self.db.insert_report(
             week_start=week_start,
