@@ -2,11 +2,9 @@ import json
 import logging
 import os
 import re
-import time
 from datetime import datetime
 from pathlib import Path
 
-import httpx
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,13 +12,13 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
 ALLOWED_USERS = set(filter(None, os.getenv("ALLOWED_USERS", "").split(",")))
 
 from app.storage.db import Database
 from app.storage.files import FileManager
 from app.summarization.chunker import chunk_text
+from app.summarization.llm_client import LLMClient
 from app.summarization.prompts import PromptLibrary
 from app.utils.config import load_config
 from app.utils.helpers import parse_json_field, week_boundary
@@ -31,49 +29,28 @@ files = FileManager(cfg.app.data_dir)
 prompts = PromptLibrary()
 DATA_DIR = Path(cfg.app.data_dir)
 
-# ── Gemini LLM ──────────────────────────────────────────────────────────
+# Shared LLM client - single instance, provider chain from config (openrouter/deepseek/gemini/ollama)
+llm = LLMClient(cfg, logger=logger)
 
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
-
-def gemini_chat(
+def _llm_chat(
     messages: list[dict],
     system_prompt: str = "",
     temperature: float = 0.3,
     max_tokens: int = 4096,
     json_mode: bool = False,
 ) -> str:
-    payload = {
-        "contents": [{"role": m["role"], "parts": [{"text": m["content"]}]} for m in messages],
-        "generationConfig": {
-            "temperature": temperature,
-            "maxOutputTokens": max_tokens,
-        },
-    }
-    if system_prompt:
-        payload["system_instruction"] = {"parts": [{"text": system_prompt}]}
-    if json_mode:
-        payload["generationConfig"]["response_mime_type"] = "application/json"
+    """Call the shared LLMClient; json_mode maps to response_format."""
+    response_format = {"type": "json_object"} if json_mode else None
+    return llm.chat(messages, temperature=temperature, max_tokens=max_tokens, response_format=response_format)
 
-    for attempt in range(3):
-        try:
-            r = httpx.post(GEMINI_URL, headers={"x-goog-api-key": GEMINI_API_KEY}, json=payload, timeout=120)
-            if r.status_code == 429:
-                wait = 5 * (2**attempt)
-                print(f"Gemini rate limited — waiting {wait}s")
-                time.sleep(wait)
-                continue
-            r.raise_for_status()
-            data = r.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-            return text
-        except Exception as e:
-                    if attempt < 2:
-                        time.sleep(2**attempt)
-                        continue
-                    raise RuntimeError(f"Gemini API error: {e}") from e
 
-    raise RuntimeError("Gemini API failed after retries")
+def _llm_model() -> str:
+    return {
+        "openrouter": cfg.llm.openrouter_model,
+        "deepseek": cfg.llm.deepseek_model,
+        "ollama": cfg.llm.ollama_model,
+    }.get(cfg.llm.provider, cfg.llm.gemini_model)
 
 
 def parse_llm_json(response: str) -> dict:
@@ -97,7 +74,7 @@ def pacex_summarize(text: str, title: str = "") -> dict:
                 f"[Previous chunk context]\n{chunk['overlap_prefix']}\n\n[Current chunk]\n{chunk_text_content}"
             )
         prompt = prompts.render("summarize_chunk", text=chunk_text_content, title=title)
-        response = gemini_chat(
+        response = _llm_chat(
             [{"role": "user", "content": prompt}],
             system_prompt=system,
             json_mode=True,
@@ -109,7 +86,7 @@ def pacex_summarize(text: str, title: str = "") -> dict:
 
     summaries_text = "\n\n---\n\n".join(_format_chunk(i, s) for i, s in enumerate(chunk_summaries))
     prompt = prompts.render("synthesize", summaries=summaries_text, title=title)
-    response = gemini_chat(
+    response = _llm_chat(
         [{"role": "user", "content": prompt}],
         system_prompt=system,
         json_mode=True,
@@ -240,7 +217,7 @@ async def ingest_youtube(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             contradictions=summary.get("contradictions"),
             why_it_matters=summary.get("why_it_matters"),
             open_questions=summary.get("open_questions"),
-            model_used=f"gemini/{GEMINI_MODEL}",
+            model_used=f"{cfg.llm.provider}/{_llm_model()}",
         )
         files.save_summary(source_id, json.dumps(summary, indent=2))
         db.update_source_status(source_id, "completed")
@@ -285,7 +262,7 @@ async def ingest_text_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             contradictions=summary.get("contradictions"),
             why_it_matters=summary.get("why_it_matters"),
             open_questions=summary.get("open_questions"),
-            model_used=f"gemini/{GEMINI_MODEL}",
+            model_used=f"{cfg.llm.provider}/{_llm_model()}",
         )
         files.save_summary(source_id, json.dumps(summary, indent=2))
         db.update_source_status(source_id, "completed")
@@ -363,7 +340,7 @@ async def handle_file(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             contradictions=summary.get("contradictions"),
             why_it_matters=summary.get("why_it_matters"),
             open_questions=summary.get("open_questions"),
-            model_used=f"gemini/{GEMINI_MODEL}",
+            model_used=f"{cfg.llm.provider}/{_llm_model()}",
         )
         files.save_summary(source_id, json.dumps(summary, indent=2))
         db.update_source_status(source_id, "completed")
@@ -447,20 +424,10 @@ async def report(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     msg = await update.message.reply_text("📊 Generating weekly report...")
     try:
-        import app.summarization.llm_client as llm_mod
         from app.reports.generator import ReportGenerator
-        from app.summarization.llm_client import LLMClient
 
-        original_chat = llm_mod.LLMClient.chat
-        llm_mod.LLMClient.chat = lambda self, messages, **kw: gemini_chat(messages, system_prompt="", **kw)
-
-        try:
-            llm = LLMClient(cfg)
-            prompts_lib = PromptLibrary()
-            gen = ReportGenerator(db, files, llm, prompts_lib)
-            result = gen.generate_weekly()
-        finally:
-            llm_mod.LLMClient.chat = original_chat
+        gen = ReportGenerator(db, files, llm, prompts)
+        result = gen.generate_weekly()
 
         if result["status"] == "skipped":
             await msg.edit_text("No summaries found for this week. Ingest some content first.")
@@ -520,7 +487,7 @@ async def status_cmd(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
         f"✅ Completed: {completed}\n"
         f"❌ Failed: {failed}\n"
         f"📊 Reports: {len(reports_list)}\n"
-        f"🤖 LLM: Gemini ({GEMINI_MODEL})",
+        f"🤖 LLM: {cfg.llm.provider} ({_llm_model()})",
         parse_mode="Markdown",
     )
 
@@ -541,7 +508,7 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         ctx.args = [text]
         await ingest_text_cmd(update, ctx)
     else:
-        response = gemini_chat(
+        response = _llm_chat(
             [{"role": "user", "content": text}],
             system_prompt=(
                 "You are Hermes, the SignalForge research analyst — an elite research analyst "
@@ -561,8 +528,14 @@ def main():
     if not TELEGRAM_BOT_TOKEN:
         print("ERROR: TELEGRAM_BOT_TOKEN not set in .env")
         return
-    if not GEMINI_API_KEY:
-        print("ERROR: GEMINI_API_KEY not set in .env")
+    has_llm = (
+        cfg.llm.gemini_api_key
+        or cfg.llm.openrouter_api_key
+        or cfg.llm.deepseek_api_key
+        or cfg.llm.provider == "ollama"
+    )
+    if not has_llm:
+        logger.error("No LLM configured: set GEMINI_API_KEY / OPENROUTER_API_KEY / DEEPSEEK_API_KEY, or LLM_PROVIDER=ollama")
         return
 
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()

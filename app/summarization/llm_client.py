@@ -53,6 +53,52 @@ class LLMClient:
             headers["Authorization"] = f"Bearer {self.config.llm.deepseek_api_key}"
         return headers
 
+    def _post_gemini(self, messages: list[dict], temperature: float, max_tokens: int, json_mode: bool) -> str:
+        """Gemini generateContent API (different wire shape from OpenAI-compatible providers)."""
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{self.config.llm.gemini_model}:generateContent"
+        )
+        system_parts = [m["content"] for m in messages if m["role"] == "system"]
+        contents = [
+            {"role": m["role"], "parts": [{"text": m["content"]}]}
+            for m in messages
+            if m["role"] != "system"
+        ]
+        payload: dict = {
+            "contents": contents,
+            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
+        }
+        if system_parts:
+            payload["system_instruction"] = {"parts": [{"text": chr(10).join(system_parts)}]}
+        if json_mode:
+            payload["generationConfig"]["response_mime_type"] = "application/json"
+
+        last_error: Exception | None = None
+        for attempt in range(3):
+            self._limiter.wait()
+            try:
+                resp = httpx.post(
+                    url,
+                    headers={"x-goog-api-key": self.config.llm.gemini_api_key},
+                    json=payload,
+                    timeout=120,
+                )
+                if resp.status_code == 429:
+                    wait = 5 * (2**attempt)
+                    self._log(f"Gemini rate limited — waiting {wait}s")
+                    time.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            except Exception as e:  # noqa: BLE001 - narrow to RuntimeError at the boundary
+                last_error = e
+                if attempt < 2:
+                    time.sleep(2**attempt)
+                    continue
+                raise RuntimeError(f"Gemini API error: {e}") from e
+        raise RuntimeError(f"Gemini API failed after retries: {last_error}")
+
     def _fallback_provider(self) -> str | None:
         primary = self.config.llm.provider
         if primary == "openrouter":
@@ -168,18 +214,23 @@ class LLMClient:
         max_tokens: int = 4096,
         response_format: dict | None = None,
     ) -> str:
-        # Try providers in order: configured primary → fallbacks
-        providers = [self.config.llm.provider]
-        if self.config.llm.provider == "deepseek":
-            if self.config.llm.openrouter_api_key:
-                providers.append("openrouter")
+        # Try providers in order: configured primary → keyed remotes → ollama
+        primary = self.config.llm.provider
+        providers = [primary]
+        for p in ("openrouter", "deepseek", "gemini"):
+            if p == primary:
+                continue
+            key = {
+                "openrouter": self.config.llm.openrouter_api_key,
+                "deepseek": self.config.llm.deepseek_api_key,
+                "gemini": self.config.llm.gemini_api_key,
+            }.get(p)
+            if key:
+                providers.append(p)
+        if "ollama" not in providers:
             providers.append("ollama")
-        elif self.config.llm.provider == "openrouter":
-            providers.append("ollama")
-        elif self.config.llm.provider == "ollama":
-            if self.config.llm.openrouter_api_key:
-                providers.append("openrouter")
 
+        json_mode = bool(response_format)
         last_error = None
         for provider in providers:
             is_remote = provider in ("openrouter", "deepseek")
@@ -188,6 +239,8 @@ class LLMClient:
                 self._log("Ollama not reachable — skipping")
                 continue
             try:
+                if provider == "gemini":
+                    return self._post_gemini(messages, temperature, max_tokens, json_mode)
                 return self._attempt_call(
                     messages, temperature, max_tokens, response_format, provider, max_retries=max_retry
                 )
@@ -198,4 +251,4 @@ class LLMClient:
         raise RuntimeError(f"All providers failed. Last error: {last_error}")
 
     def supports_json_mode(self) -> bool:
-        return self.config.llm.provider in ("openrouter", "deepseek")
+        return self.config.llm.provider in ("openrouter", "deepseek", "gemini")

@@ -47,6 +47,8 @@ class LLMConfig:
     ollama_model: str = "llama3.2"
     deepseek_api_key: str = ""
     deepseek_model: str = "deepseek-chat"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
     max_rpm: int = 20
 
 
@@ -98,6 +100,8 @@ def load_config(config_path: str | None = None) -> Config:
     cfg.llm.ollama_model = os.getenv("OLLAMA_MODEL", cfg.llm.ollama_model)
     cfg.llm.deepseek_api_key = os.getenv("DEEPSEEK_API_KEY", "")
     cfg.llm.deepseek_model = os.getenv("DEEPSEEK_MODEL", cfg.llm.deepseek_model)
+    cfg.llm.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
+    cfg.llm.gemini_model = os.getenv("GEMINI_MODEL", cfg.llm.gemini_model)
     cfg.rclone.remote = os.getenv("RCLONE_REMOTE", cfg.rclone.remote)
     cfg.rclone.path = os.getenv("RCLONE_PATH", cfg.rclone.path)
 
