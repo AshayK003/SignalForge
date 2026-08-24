@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.1] - 2026-08-24
+
+### Added
+- **Tests for YouTube ingestion** (`tests/test_youtube_ingestion.py`, 18
+  tests): video-ID extraction across URL shapes, yt-dlp command construction
+  (base flags, cookie handling), metadata parsing, download success/failure
+  paths, and transcript fetching with API-error fallback. All external
+  boundaries (subprocess + library) mocked; no network access. Closes #4.
+
 ## [0.2.0] - 2026-08-24
 
 ### Changed
