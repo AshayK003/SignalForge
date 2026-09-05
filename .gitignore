@@ -13,3 +13,4 @@ bot_err.txt
 
 # Internal files
 internals/
+.hermes/

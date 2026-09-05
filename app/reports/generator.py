@@ -43,8 +43,14 @@ class ReportGenerator:
             }
 
     def generate_weekly(self, week_start: str | None = None, week_end: str | None = None) -> dict:
-        if not week_start or not week_end:
-            week_start, week_end = week_boundary()
+        if not week_start:
+            week_start, _ = week_boundary()
+        if not week_end:
+            _, week_end = week_boundary()
+        # week_boundary() is date-only; vs datetime ingested_at that would drop
+        # nearly all of the end day under string comparison.
+        if len(week_end) == 10:
+            week_end += " 23:59:59"
 
         summaries = self.db.get_summaries_in_week(week_start, week_end)
 
@@ -80,7 +86,9 @@ class ReportGenerator:
             all_core_ideas.extend(parse_json_field(s.get("core_ideas", "[]")) or [])
             all_open_questions.extend(parse_json_field(s.get("open_questions", "[]")) or [])
             why = s.get("why_it_matters", "")
-            if why:
+            if isinstance(why, list):
+                why_it_matters_list.extend(str(w) for w in why if w)
+            elif why:
                 why_it_matters_list.append(why)
 
         combined = "\n\n".join(sources_text)

@@ -53,8 +53,15 @@ Copy `.env.example` to `.env` and fill in:
 TELEGRAM_BOT_TOKEN=your_bot_token
 GEMINI_API_KEY=your_gemini_key
 
-# Optional — restrict bot access
+# Optional — restrict bot access (REQUIRED: bot refuses to start without
+# either this or ALLOW_OPEN_BOT=1, so strangers can't burn your LLM quota)
 ALLOWED_USERS=your_telegram_user_id
+# Personal-use escape hatch — never enable on a public bot username
+# ALLOW_OPEN_BOT=1
+
+# Optional — abuse caps (20 MB uploads, 2 h max video)
+# SIGNALFORGE_MAX_UPLOAD_BYTES=20971520
+# SIGNALFORGE_MAX_VIDEO_SECONDS=7200
 
 # Optional — switch models
 GEMINI_MODEL=gemini-2.5-flash

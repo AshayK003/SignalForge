@@ -13,7 +13,18 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except ValueError:
+        logger.warning("Invalid %s — using default %d", name, default)
+        return default
+
+
 ALLOWED_USERS = set(filter(None, os.getenv("ALLOWED_USERS", "").split(",")))
+
+# Upload/download abuse caps (bytes / seconds, overridable via env).
+MAX_UPLOAD_BYTES = _env_int("SIGNALFORGE_MAX_UPLOAD_BYTES", 20 * 1024 * 1024)
 
 from app.storage.db import Database
 from app.storage.files import FileManager
@@ -126,8 +137,10 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 
 def _is_authorized(update: Update) -> bool:
+    # Fail closed: an empty allowlist only permits traffic when the operator
+    # explicitly opts into an open bot (personal-use mode).
     if not ALLOWED_USERS:
-        return True
+        return os.getenv("ALLOW_OPEN_BOT", "") == "1"
     return str(update.effective_user.id) in ALLOWED_USERS
 
 
@@ -158,8 +171,16 @@ async def ingest_youtube(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not url:
         await update.message.reply_text("Usage: `/ingest_youtube <url>`", parse_mode="Markdown")
         return
+    from app.ingestion.youtube import is_youtube_url
+    if not is_youtube_url(url):
+        await update.message.reply_text(
+            "Usage: `/ingest_youtube <url>` — YouTube watch/shorts/live links only.",
+            parse_mode="Markdown",
+        )
+        return
 
     msg = await update.message.reply_text("📥 Processing YouTube video...")
+    source_id = None
     try:
         from app.ingestion.youtube import download_audio, extract_metadata, get_captions
         from app.transcription.transcriber import Transcriber
@@ -189,11 +210,12 @@ async def ingest_youtube(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             title = result.get("title", url)
             await msg.edit_text(f"✅ Transcribed — {len(text):,} chars\n🧠 Summarizing...")
 
-        summary = pacex_summarize(text, title)
-
         source_id = db.insert_source(
             "youtube", title=title, url=url, metadata={"method": transcript_data.get("model_used", "unknown")}
         )
+        db.update_source_status(source_id, "processing")
+        summary = pacex_summarize(text, title)
+
         files.save_transcript(source_id, text, "txt")
         db.insert_transcript(
             source_id,
@@ -227,6 +249,11 @@ async def ingest_youtube(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     except Exception:
         logger.exception("ingest_youtube error")
+        if source_id:
+            try:
+                db.update_source_status(source_id, "failed")
+            except Exception:
+                logger.warning("could not mark source %s failed", source_id)
         await msg.edit_text("❌ Something went wrong. Check logs for details.")
 
 
@@ -238,14 +265,21 @@ async def ingest_text_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not text:
         await update.message.reply_text("Usage: `/ingest_text <text>`", parse_mode="Markdown")
         return
+    try:
+        text = validate_user_input(text)
+    except ValueError as e:
+        await update.message.reply_text(
+            f"❌ Invalid input ({categorize_error(e)}). Send non-empty text under 4000 chars."
+        )
+        return
 
     msg = await update.message.reply_text("🧠 Analyzing...")
+    source_id = None
     try:
         title = f"Manual Entry {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-        summary = pacex_summarize(text, title)
-
         source_id = db.insert_source("manual", title=title)
         db.update_source_status(source_id, "processing")
+        summary = pacex_summarize(text, title)
         files.save_transcript(source_id, text, "txt")
         db.insert_transcript(source_id, text=text, language="en", segments=[], model_used="manual")
         db.insert_summary(
@@ -272,6 +306,11 @@ async def ingest_text_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     except Exception:
         logger.exception("ingest_text error")
+        if source_id:
+            try:
+                db.update_source_status(source_id, "failed")
+            except Exception:
+                logger.warning("could not mark source %s failed", source_id)
         await msg.edit_text("❌ Something went wrong. Check logs for details.")
 
 
@@ -280,14 +319,26 @@ async def handle_file(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Unauthorized.")
         return
     msg = await update.message.reply_text("📁 Processing file...")
+    source_id = None
     try:
-        file = await (update.message.document or update.message.audio or update.message.voice).get_file()
+        attachment = update.message.document or update.message.audio or update.message.voice
+        if attachment is None:
+            await msg.edit_text("❌ Please send a PDF, audio, or text file.")
+            return
+        file = await attachment.get_file()
+        if (file.file_size or 0) > MAX_UPLOAD_BYTES:
+            await msg.edit_text(
+                f"❌ File too large ({(file.file_size or 0) // (1024 * 1024)} MB). "
+                f"Limit is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB."
+            )
+            return
         ext = Path(file.file_path or "").suffix.lower() or ".bin"
         dest = DATA_DIR / "raw" / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}"
         dest.parent.mkdir(parents=True, exist_ok=True)
         await file.download_to_drive(dest)
 
-        file_type = "pdf" if ext == ".pdf" else "audio" if ext in (".mp3", ".wav", ".m4a", ".ogg", ".flac") else "text"
+        is_audio_msg = update.message.audio is not None or update.message.voice is not None
+        file_type = "pdf" if ext == ".pdf" else "audio" if (is_audio_msg or ext in (".mp3", ".wav", ".m4a", ".ogg", ".flac")) else "text"
         title = update.message.document.file_name if update.message.document else f"audio{ext}"
 
         source_id = db.insert_source(file_type, title=title, file_path=str(dest), file_size=dest.stat().st_size)
@@ -350,6 +401,11 @@ async def handle_file(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     except Exception:
         logger.exception("handle_file error")
+        if source_id:
+            try:
+                db.update_source_status(source_id, "failed")
+            except Exception:
+                logger.warning("could not mark source %s failed", source_id)
         await msg.edit_text("❌ Something went wrong. Check logs for details.")
 
 
@@ -434,9 +490,9 @@ async def report(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return
 
         w_start, w_end = week_boundary()
-        report_data = db.list_reports(limit=1)
+        report_data = db.get_report(result["report_id"])
         if report_data:
-            exec_summary = report_data[0].get("executive_summary", "")[:1500]
+            exec_summary = (report_data.get("executive_summary", "") or "")[:1500]
             await msg.edit_text(
                 f"📊 *Weekly Report ({w_start} — {w_end})*\n\n"
                 f"Sources: {result['source_count']}\n\n"
@@ -492,17 +548,15 @@ async def status_cmd(update: Update, _ctx: ContextTypes.DEFAULT_TYPE):
     )
 
 
-_YOUTUBE_RE = re.compile(r"(https?://)?(www\.)?(youtube\.com|youtu\.be)/\S+", re.I)
-
-
 async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _is_authorized(update):
         await update.message.reply_text("Unauthorized.")
         return
     text = update.message.text.strip()
-    youtube_match = _YOUTUBE_RE.search(text)
-    if youtube_match:
-        ctx.args = [youtube_match.group(0)]
+    from app.ingestion.youtube import find_youtube_url
+    youtube_url = find_youtube_url(text)
+    if youtube_url:
+        ctx.args = [youtube_url]
         await ingest_youtube(update, ctx)
     elif len(text) > 200:
         ctx.args = [text]
@@ -536,6 +590,9 @@ def main():
     )
     if not has_llm:
         logger.error("No LLM configured: set GEMINI_API_KEY / OPENROUTER_API_KEY / DEEPSEEK_API_KEY, or LLM_PROVIDER=ollama")
+        return
+    if not ALLOWED_USERS and os.getenv("ALLOW_OPEN_BOT", "") != "1":
+        logger.error("Refusing to start: ALLOWED_USERS is empty (open bot). Set ALLOWED_USERS=<your-telegram-id> or ALLOW_OPEN_BOT=1 for personal use.")
         return
 
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()

@@ -170,19 +170,22 @@ class LLMClient:
                     if attempt < max_retries - 1:
                         self._wait_for_rate_limit(resp.headers)
                         continue
-                    raise RuntimeError(f"Rate limited after {max_retries} retries ({provider}/{model}): {resp.text}")
+                    self._log(f"UPSTREAM 429 body: {resp.text[:500]}")
+                    raise RuntimeError(f"Rate limited after {max_retries} retries ({provider}/{model})")
 
                 if resp.status_code >= 500:
                     last_error = f"HTTP {resp.status_code}"
                     if attempt < max_retries - 1:
                         time.sleep(2**attempt)
                         continue
+                    self._log(f"UPSTREAM {resp.status_code} body: {resp.text[:500]}")
                     raise RuntimeError(
-                        f"Server error after {max_retries} retries ({provider}/{model}): {resp.status_code}: {resp.text}"
+                        f"Server error after {max_retries} retries ({provider}/{model}): {resp.status_code}"
                     )
 
                 if resp.status_code != 200:
-                    raise RuntimeError(f"API error ({provider}/{model}): {resp.status_code}: {resp.text}")
+                    self._log(f"UPSTREAM {resp.status_code} body: {resp.text[:500]}")
+                    raise RuntimeError(f"API error ({provider}/{model}): {resp.status_code}")
 
                 result = resp.json()
                 content = result["choices"][0]["message"]["content"]

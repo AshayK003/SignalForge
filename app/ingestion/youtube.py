@@ -17,6 +17,38 @@ _YTDLP_BASE = [
     "youtube:skip=web_safari",
 ]
 
+# Videos over 2h (or livestreams with no duration) are rejected before download.
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
+
+MAX_VIDEO_SECONDS = _env_int("SIGNALFORGE_MAX_VIDEO_SECONDS", 7200)
+
+_YOUTUBE_URL_RE = re.compile(
+    r"^https?://(www\.|m\.)?(youtube\.com/(watch\?v=|shorts/|live/|embed/)|youtu\.be/)([\w-]{11})([?&#].*)?$",
+    re.I,
+)
+
+
+def is_youtube_url(url: str | None) -> bool:
+    """Strict allowlist: real YouTube watch/shorts/live/embed URLs only."""
+    return bool(_YOUTUBE_URL_RE.match((url or "").strip()))
+
+
+_YOUTUBE_FIND_RE = re.compile(
+    r"https?://(www\.|m\.)?(youtube\.com/(watch\?v=|shorts/|live/|embed/)|youtu\.be/)([\w-]{11})\b",
+    re.I,
+)
+
+
+def find_youtube_url(text: str | None) -> str | None:
+    """First strict YouTube URL embedded in free text, else None."""
+    m = _YOUTUBE_FIND_RE.search(text or "")
+    return m.group(0) if m else None
+
 
 def _build_cmd(*args: str) -> list[str]:
     cmd = _YTDLP_BASE + list(args)
@@ -33,7 +65,12 @@ def download_audio(url: str, output_dir: str | Path, logger: Any = None, ffmpeg_
     info = extract_metadata(url)
     video_id = info.get("id", "unknown")
     title = info.get("title", "Unknown")
-    duration = info.get("duration", 0)
+    duration = info.get("duration", 0) or 0
+    if duration <= 0 or duration > MAX_VIDEO_SECONDS:
+        raise RuntimeError(
+            f"video duration {duration}s outside downloadable range "
+            f"(livestreams unsupported, max {MAX_VIDEO_SECONDS}s)"
+        )
     webpage_url = info.get("webpage_url", url)
     uploader = info.get("uploader", "")
     upload_date = info.get("upload_date", "")

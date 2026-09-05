@@ -6,7 +6,8 @@ from pathlib import Path
 from fpdf import FPDF
 
 
-def strip_markdown(text: str) -> str:
+def strip_markdown(text: str | None) -> str:
+    text = text or ""
     text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
     text = re.sub(r"\[([^\]]*)\]\([^)]+\)", r"\1", text)
     text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
@@ -290,4 +291,4 @@ def generate_pdf(
         pdf.section_title("Contradictions")
         pdf.bullet_list(contradictions)
 
-    return pdf.output()
+    return bytes(pdf.output())

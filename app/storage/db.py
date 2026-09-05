@@ -228,6 +228,11 @@ class Database:
         chunk_index: int | None = None,
         parent_summary_id: int | None = None,
     ) -> int:
+        # Normalize free-form LLM output: lists become text, None becomes "".
+        # (Callers pass summary.get(...) straight through.)
+        if isinstance(why_it_matters, list):
+            why_it_matters = "; ".join(str(w) for w in why_it_matters)
+        why_it_matters = why_it_matters or ""
         return self._retry(
             lambda: self._insert_summary(
                 source_id,

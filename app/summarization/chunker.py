@@ -2,6 +2,25 @@ import re
 from collections.abc import Generator
 
 
+def _word_overlap(prev: str, overlap: int) -> str:
+    """Trailing words of prev fitting in overlap chars (no mid-word cuts)."""
+    if overlap <= 0 or not prev:
+        return ""
+    words = prev.split()
+    out: list[str] = []
+    total = 0
+    for w in reversed(words):
+        add = len(w) + (1 if out else 0)
+        if total + add > overlap:
+            break
+        out.append(w)
+        total += add
+    if not out and prev:
+        # No word boundary fits (e.g. one long token) — char slice beats nothing.
+        return prev[-overlap:]
+    return " ".join(reversed(out))
+
+
 def chunk_text(text: str | None, max_chunk_size: int = 3000, overlap: int = 300) -> list[dict]:
     if not text:
         return []
@@ -13,10 +32,11 @@ def chunk_text(text: str | None, max_chunk_size: int = 3000, overlap: int = 300)
 
     for para in paragraphs:
         para_len = len(para)
+        sep = 2 if current else 0  # "\n\n" joiner counts toward the budget
 
-        if current_len + para_len <= max_chunk_size:
+        if current_len + sep + para_len <= max_chunk_size:
             current.append(para)
-            current_len += para_len
+            current_len += sep + para_len
         else:
             if current:
                 chunks.append(_make_chunk(chunks, current, overlap))
@@ -41,8 +61,7 @@ def _make_chunk(existing_chunks: list, paragraphs: list[str], overlap: int) -> d
     overlap_text = ""
 
     if existing_chunks and overlap > 0:
-        prev = existing_chunks[-1]["text"]
-        overlap_text = prev[-overlap:] if len(prev) > overlap else prev
+        overlap_text = _word_overlap(existing_chunks[-1]["text"], overlap)
 
     return {
         "index": len(existing_chunks),
@@ -62,25 +81,33 @@ def _split_large_paragraph(text: str, max_size: int, overlap: int, start_index: 
     current = []
     current_len = 0
     idx = 0
+    prev_text = ""
+
+    def _emit() -> dict:
+        nonlocal idx, prev_text
+        chunk_text_ = " ".join(current)
+        prefix = _word_overlap(prev_text, overlap)
+        prev_text = chunk_text_
+        out = {
+            "index": start_index + idx,
+            "text": chunk_text_,
+            "overlap_prefix": prefix,
+            "char_count": len(chunk_text_),
+        }
+        idx += 1
+        return out
 
     for sent in sentences:
         sent_len = len(sent)
-        if current_len + sent_len <= max_size:
+        sep = 1 if current else 0  # " " joiner counts toward the budget
+        if current_len + sep + sent_len <= max_size:
             current.append(sent)
-            current_len += sent_len
+            current_len += sep + sent_len
         else:
             if current:
-                chunk_text = " ".join(current)
-                yield {
-                    "index": start_index + idx,
-                    "text": chunk_text,
-                    "overlap_prefix": "",
-                    "char_count": len(chunk_text),
-                }
-                idx += 1
+                yield _emit()
             current = [sent]
             current_len = sent_len
 
     if current:
-        chunk_text = " ".join(current)
-        yield {"index": start_index + idx, "text": chunk_text, "overlap_prefix": "", "char_count": len(chunk_text)}
+        yield _emit()

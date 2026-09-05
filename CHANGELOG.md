@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.2.2] - 2026-09-05
+
+### Fixed
+
+- **Fail-closed access control** — empty `ALLOWED_USERS` no longer opens the
+  bot to everyone; startup refuses without `ALLOWED_USERS` or
+  `ALLOW_OPEN_BOT=1`. Both documented in `.env.example` and README.
+- **YouTube URL allowlist** — `/ingest_youtube` and autodetect accept only
+  real watch/shorts/live/embed URLs (`is_youtube_url` /
+  `find_youtube_url`); downloads capped at 2 h (livestreams rejected).
+- **Upload cap** — Telegram files over 20 MB are refused before download
+  (`SIGNALFORGE_MAX_UPLOAD_BYTES`).
+- **No more lost failures** — sources are recorded before summarization and
+  marked `failed` on error (was: stuck `processing`, or no record at all).
+- **Weekly report window** — one-sided bounds no longer reset the other;
+  date-only end extended to end-of-day (Sundays were silently dropped);
+  `/report` shows the just-created report via `report_id`.
+- **Data correctness** — word-boundary chunk overlap with separator
+  budgeting; `why_it_matters` lists normalized on insert; `generate_pdf`
+  returns real `bytes`; `strip_markdown(None)` safe; upstream LLM bodies
+  logged server-side, never raised to chat.
+- **Hygiene** — untracked `.hermes/gfi_audit.json`, `.hermes/` ignored.
+
+### Tests
+
+- 28 new regression tests (`tests/test_audit_fixes.py`); full suite
+  121 passed, `ruff check app/ tests/ database/` clean.
+
 ## [0.2.1] - 2026-08-24
 
 ### Added
