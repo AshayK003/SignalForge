@@ -124,7 +124,35 @@ def test_strip_markdown_none():
     assert strip_markdown(None) == ""
 
 
-def test_generate_pdf_returns_bytes():
+def _ensure_test_font(monkeypatch):
+    """Point the PDF renderer at DejaVu on fontless CI runners.
+
+    Keeps render tests hermetic: same code path, only the font asset
+    differs. Skips only when no usable TTF exists at all.
+    """
+    import os
+
+    import app.reports.pdf_gen as pg
+
+    base = "/usr/share/fonts/truetype/dejavu/DejaVuSans"
+    cands = {
+        "regular": base + ".ttf",
+        "bold": base + "-Bold.ttf",
+        "italic": base + "-Oblique.ttf",
+        "bold_italic": base + "-BoldOblique.ttf",
+    }
+    if all(os.path.exists(p) for p in cands.values()):
+        monkeypatch.setitem(pg._FONTS, "ci-dejavu", cands)
+        monkeypatch.setattr(pg, "_find_unicode_font", lambda: "ci-dejavu")
+        return
+    try:
+        pg._find_unicode_font()
+    except RuntimeError:
+        pytest.skip("no usable Unicode font on this machine")
+
+
+def test_generate_pdf_returns_bytes(monkeypatch):
+    _ensure_test_font(monkeypatch)
     data = generate_pdf(title="t", week_start="2026-08-31",
                         week_end="2026-09-06", executive_summary="hello",
                         source_count=0, insights=[], action_items=[],
@@ -150,7 +178,8 @@ def _mock_report_deps():
     return files, llm, prompts
 
 
-def test_weekly_end_of_day_includes_sunday(db):
+def test_weekly_end_of_day_includes_sunday(db, monkeypatch):
+    _ensure_test_font(monkeypatch)
     sid = db.insert_source("manual", title="sunday")
     db.insert_summary(sid, level="source", summary_text="sunday work")
     files, llm, prompts = _mock_report_deps()
